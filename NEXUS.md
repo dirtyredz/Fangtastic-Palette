@@ -167,18 +167,19 @@ First release.
 
 ## Screenshots
 
-Files live in `screenshots/`. The thumbnail is set separately in the upload form. Not yet delivered —
-capture from the current build before publishing.
+Files live in `screenshots/` (delivered). The thumbnail is set separately in the upload form.
 
-| # | Shot | Notes |
-|---|---|---|
-| - | Thumbnail, **16:9** | title art must read "Fangtastic Palette" exactly; proofread lettering at 4–8x |
-| - | Title banner | matches the bat tab icon / crest |
-| 1 | The money shot: Bat Form tab, swatch rows + intensity sliders, a recoloured bat | tab, decorated headers, selected swatch + `+` tile, scrollbar, live preview, Confirm/Cancel prompts in one |
-| 2 | Another colourway | |
-| 3 | Another colourway | |
-| 4 | The custom RGB picker | shows the `+` tile's picker |
-| 5 | The bat tab in the strip | shows the tab icon sitting with the vanilla tabs |
+| # | Shot | File | Notes |
+|---|---|---|---|
+| - | Thumbnail, **16:9** | `Fangtastic Palette Thumbnail.png` | ✅ 1672×941 (ratio 1.777); title art reads "Fangtastic Palette" |
+| - | Title banner | `Fangtastic Palette Banner.png` | ✅ wide strip |
+| 1 | Colourway — pink | `Fangtastic Palette Pink Bat.png` | ✅ |
+| 2 | Colourway — dark/evil | `Fangtastic Palette Evil Bat.png` | ✅ |
+| 3 | Colourway — ghost | `Fangtastic Palette Ghost Bat.png` | ✅ |
+
+Optional extras not captured (nice-to-have, not blockers): a UI-forward "money shot" with the Bat
+Form tab + swatch rows + intensity sliders + Confirm/Cancel prompts in one frame, the RGB picker, and
+the bat tab sitting in the strip.
 
 ### Thumbnail must be composed at 16:9
 
