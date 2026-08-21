@@ -5,6 +5,9 @@ pupil and glint each on their own — and the dust trail the bat leaves in fligh
 the colours: config values, and a **Bat Form tab in the mirror's wardrobe** with a live preview
 and swatch pickers.
 
+**Status:** 🚀 **Published** — v1.0.0 live on Nexus as
+[mod 143](https://www.nexusmods.com/moonlightpeaks/mods/143).
+
 Config settings live under **Colors** in Mod Nook (or
 `BepInEx/config/com.dirtyredz.moonlightpeaks.fangtasticpalette.cfg`). Every colour is a hex code
 (`#8800FF`) or an HTML colour name (`purple`); blank means "leave vanilla". Changes apply
