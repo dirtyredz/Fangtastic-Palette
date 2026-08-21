@@ -19,8 +19,8 @@ powershell -File pack.ps1
 ```
 
 Produces `dist/FangtasticPalette-<version>.zip` laid out as
-`BepInEx/plugins/FangtasticPalette/FangtasticPalette.dll`, reading the version from the csproj and
-refusing to pack if `PluginVersion` in `Plugin.cs` disagrees.
+`BepInEx/plugins/FangtasticPalette/FangtasticPalette.dll`, reading the version from the csproj;
+`Plugin.cs` derives that same version at build time via `ModBuildInfo.Version`.
 
 There is no test project — every path reads live game state (the wardrobe screen, the preview
 rig, the inventory). The checklist below carries the weight.
@@ -68,7 +68,7 @@ Root checklist first: [12-versioning-and-release.md](../../12-versioning-and-rel
 
 ### Housekeeping
 
-- [ ] `<Version>` and `PluginVersion` match — `pack.ps1` enforces this
+- [ ] `<Version>` is the single source of truth — `Plugin.cs` derives from it via `ModBuildInfo.Version`
 - [ ] CHANGELOG has one entry for this version
 - [ ] `Colors/VerboseLogging` defaults to `false`; a normal session logs only the load line
 - [ ] **Dev tools stripped** — no probe key, form-grant key, debug bands, or UV-box sliders remain
