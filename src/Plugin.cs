@@ -27,7 +27,7 @@ namespace FangtasticPalette
     {
         public const string PluginGuid = "com.dirtyredz.moonlightpeaks.fangtasticpalette";
         public const string PluginName = "Fangtastic Palette";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = ModBuildInfo.Version;
 
         internal static ManualLogSource Log;
 
