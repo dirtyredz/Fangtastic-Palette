@@ -6,13 +6,12 @@ using UnityEngine.Rendering.Universal;
 namespace FangtasticPalette
 {
     /// <summary>
-    /// Turns post-processing bloom off while the Cat Form tab is open, and back on when it isn't.
+    /// Turns post-processing bloom off while the Bat Form tab is open, and back on when it isn't.
     ///
-    /// The cat's whiskers (and eyes) use the Game/Atlas/Atlas shader, which is effectively unlit -
-    /// it renders at full colour regardless of scene lighting, so those parts are always much
-    /// brighter than the lit body. Bloom then smears that brightness outward, which reads as a
-    /// glow and makes the actual picked colour hard to judge. Hiding the particle VFX did nothing
-    /// for this because it was never a particle effect.
+    /// Unlit/emissive parts of a creature render at full colour regardless of scene lighting, so
+    /// they read much brighter than the lit body. Bloom then smears that brightness outward, which
+    /// looks like a glow and makes the actual picked colour hard to judge in the still, close-up
+    /// preview. Hiding the particle VFX did nothing for this because it was never a particle effect.
     ///
     /// Works by adding a high-priority global Volume with a bloom override of zero, rather than
     /// editing the scene's existing bloom settings. VolumeProfiles are shared assets: switching

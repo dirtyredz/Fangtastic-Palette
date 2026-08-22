@@ -340,10 +340,10 @@ namespace FangtasticPalette
         }
 
         /// <summary>
-        /// Slider bound to a plain getter/setter rather than a ConfigEntry - for controls that are
-        /// intentionally not persisted (the exploration Ear Box). Writing the setter does NOT raise
-        /// Config.SettingChanged, so only the preview refreshes (via OnColorChanged), not the live
-        /// player - which is exactly right for a mirror-only experiment.
+        /// Slider bound to a plain getter/setter rather than a ConfigEntry - for any control that is
+        /// intentionally not persisted. Writing the setter does NOT raise Config.SettingChanged, so
+        /// only the preview refreshes (via OnColorChanged), not the live player. (No caller uses this
+        /// overload today; the ConfigEntry overload above delegates to it.)
         /// </summary>
         private static float AddSliderRow(Transform parent, string label, Func<float> get, Action<float> set,
             float min, float max, Color? accent = null)

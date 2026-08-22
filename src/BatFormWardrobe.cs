@@ -38,11 +38,11 @@ namespace FangtasticPalette
         // close over their Tab data.
         private static WardrobeCustomizationScreen activeScreen;
 
-        // The instantiated cat body, so repeated tab presses reuse it and hiding it again is
+        // The instantiated bat body, so repeated tab presses reuse it and hiding it again is
         // possible. Cleared when the screen closes, since the preview rig itself is torn down.
         private static BodyViewAsset batBodyInstance;
 
-        // Live-preview support: a swatch pick applies immediately (so the cat updates as you browse),
+        // Live-preview support: a swatch pick applies immediately (so the bat updates as you browse),
         // but is only KEPT if the player presses Confirm. Snapshot the colour config when the
         // wardrobe opens and restore it on close-without-confirm - the same revert-on-cancel the
         // game gives its own try-on clothing.
@@ -134,7 +134,7 @@ namespace FangtasticPalette
                 // scroll, so the strip snaps to show the selected tab properly.
                 bumperMenu.SelectDefaultMenu();
 
-                // Snapshot the cat colours now (before any pick) so picks are a live preview that
+                // Snapshot the bat colours now (before any pick) so picks are a live preview that
                 // reverts unless Confirm is pressed. OnCustomizationsConfirmed fires when the
                 // screen's Confirm button is clicked; its Signal lives on this screen instance and
                 // dies with it, so subscribing per-open needs no explicit unsubscribe.
@@ -186,9 +186,9 @@ namespace FangtasticPalette
                         return;
                     }
 
-                    // Instantiate alongside the human body and copy its local transform, so the cat
-                    // lands wherever the rig expects a body to be. Whether that framing suits a cat
-                    // is exactly what this spike is testing.
+                    // Instantiate alongside the human body and copy its local transform, so the bat
+                    // lands wherever the rig expects a body to be. The rig's framing was built for the
+                    // human/cat body; if the bat renders off-centre, adjust this transform copy.
                     batBodyInstance = UnityEngine.Object.Instantiate(batBodyAsset, humanBody.transform.parent);
                     batBodyInstance.transform.localPosition = humanBody.transform.localPosition;
                     batBodyInstance.transform.localRotation = humanBody.transform.localRotation;
@@ -216,9 +216,9 @@ namespace FangtasticPalette
                 ApplyFlapFreeze();
                 PreviewBloomSuppressor.Suppress();
 
-                // The preview cat is a separate instance of the body prefab with its own material
+                // The preview bat is a separate instance of the body prefab with its own material
                 // instances, so the colours applied to the live player don't carry over - without
-                // this it renders vanilla black while the real cat outside is coloured.
+                // this it renders vanilla while the real bat outside is coloured.
                 BatColorPatch.ApplyToBody(batBodyInstance);
 
                 ClearCategoryPanel();
@@ -226,12 +226,12 @@ namespace FangtasticPalette
 
                 var renderers = batBodyInstance.GetComponentsInChildren<Renderer>(true).Length;
                 FangtasticPalettePlugin.Log.LogInfo(
-                    $"[FangtasticPalette] Wardrobe: showing the cat body in the preview " +
+                    $"[FangtasticPalette] Wardrobe: showing the bat body in the preview " +
                     $"({renderers} renderer(s), scale {batBodyInstance.transform.lossyScale}).");
             }
             catch (Exception e)
             {
-                FangtasticPalettePlugin.Log.LogError($"[FangtasticPalette] Wardrobe: failed to show the cat in the preview: {e}");
+                FangtasticPalettePlugin.Log.LogError($"[FangtasticPalette] Wardrobe: failed to show the bat in the preview: {e}");
             }
         }
 
@@ -259,11 +259,10 @@ namespace FangtasticPalette
         }
 
         /// <summary>
-        /// Turns off the cat's glow effects in the wardrobe preview only. The preview holds the
-        /// model still and close to the camera, which makes the aura sparkles and trail far more
-        /// prominent than they are in play - enough to obscure the fur colour being picked. This
-        /// touches only the preview's own instantiated copy, so the glow in the world is
-        /// unaffected; AuraColor still controls that.
+        /// Turns off the bat's glow/VFX effects in the wardrobe preview only. The preview holds the
+        /// model still and close to the camera, which makes any aura sparkles and trail far more
+        /// prominent than they are in play - enough to obscure the colour being picked. This
+        /// touches only the preview's own instantiated copy, so the glow in the world is unaffected.
         /// </summary>
         private static void HidePreviewVfx()
         {
@@ -292,8 +291,7 @@ namespace FangtasticPalette
         /// Blanks the category rows on the right. Without this the panel keeps showing whatever
         /// the previously selected tab built (skin colour swatches, accessories, ...), which is
         /// both wrong and clickable - picking one would apply a human customization while the
-        /// cat is on screen. The real colour panel replaces this; for now an empty list is the
-        /// honest state.
+        /// bat is on screen. The Bat Form colour panel replaces this.
         /// </summary>
         // The Content children this mod disabled to show its own panel, so exactly those can be
         // re-enabled again - not blindly re-enabling the inactive template or empty-state view.

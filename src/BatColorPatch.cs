@@ -29,7 +29,8 @@ namespace FangtasticPalette
     /// renders. The block is still written defensively (harmless, and correct if a block ever
     /// appears), the same read-modify-write the cat used.
     ///
-    /// Still to do: the beige FANGS (low-saturation, not separable by the warm-hue skin gate).
+    /// The fangs are handled by a UV-box spatial region (FangBox) claimed on top of the mouth area,
+    /// not by the warm-hue skin gate - they're low-saturation and not colour-separable.
     /// </summary>
     [HarmonyPatch(typeof(FormToolView<BatToolAsset>), "HandleEnterVisuallySwitchedBodyViews")]
     internal static class BatColorPatch
@@ -202,9 +203,9 @@ namespace FangtasticPalette
         }
 
         /// <summary>
-        /// Recolours any Bat Form body, not just the live player's - a wardrobe preview would
-        /// instantiate its own copy with its own material instances, so it needs applying to
-        /// explicitly. (No wardrobe tab yet; this signature is ready for one, matching the cat.)
+        /// Recolours any Bat Form body, not just the live player's - the wardrobe preview
+        /// instantiates its own copy with its own material instances, so it must be applied to
+        /// explicitly (BatFormWardrobe calls this on the preview body).
         /// </summary>
         internal static void ApplyToBody(BodyViewAsset bodyView, bool logVerbose = true, bool includeEyes = true)
         {

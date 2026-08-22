@@ -12,7 +12,7 @@ namespace FangtasticPalette
     /// the real art - the round colour plate, the bat-wing selection frame, the applied checkmark
     /// and the hover click sound - instead of hand-drawn approximations that never quite matched.
     ///
-    /// The widget is normally driven by an ItemAsset through a list. Cat colours are not items, so
+    /// The widget is normally driven by an ItemAsset through a list. Bat Form colours are not items, so
     /// this drives the pieces directly instead: ColorSegmentView.Show(colour) sets the plate (a
     /// public single-colour overload exists exactly for this), and the selection frame / applied
     /// visual are toggled through the widget's own reflected fields. The list-driven component is

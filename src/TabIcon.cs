@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FangtasticPalette
 {
     /// <summary>
-    /// The Cat Form wardrobe tab icon. Prefers a user-supplied PNG dropped at
+    /// The Bat Form wardrobe tab icon. Prefers a user-supplied PNG dropped at
     /// <c>BepInEx/config/FangtasticPalette/tab-icon.png</c> so custom art can be swapped in without a
     /// rebuild; falls back to the generated <see cref="PawSprite"/> when that file is absent or
     /// unreadable. The tab widget assigns the sprite without tinting, so the PNG's own colours show.
