@@ -299,12 +299,12 @@ namespace FangtasticPalette
         // Adds a spatial region to the list when its colour is set. originalBlend fades the region's
         // recolour back toward the source (0 = full recolour, 1 = untouched) - the "intensity" knob.
         private static void AddRegion(
-            System.Collections.Generic.List<TextureRecolor.SpatialRegion> list, Color? color,
+            System.Collections.Generic.List<SpatialRegion> list, Color? color,
             (float UMin, float UMax, float VMin, float VMax) box, bool flat, float originalBlend = 0f)
         {
             if (color.HasValue)
             {
-                list.Add(new TextureRecolor.SpatialRegion(
+                list.Add(new SpatialRegion(
                     color, box.UMin, box.UMax, box.VMin, box.VMax, flat, originalBlend: originalBlend));
             }
         }
@@ -335,7 +335,7 @@ namespace FangtasticPalette
             // Spatial regions; first match wins, so smaller/specific ones first. Mouth (combined
             // nose+mouth) is a flat fill faded by Mouth Intensity toward the original texture.
             var mouthOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.MouthIntensity.Value);
-            var regions = new System.Collections.Generic.List<TextureRecolor.SpatialRegion>(4);
+            var regions = new System.Collections.Generic.List<SpatialRegion>(4);
             AddRegion(regions, mouthColor, MouthBox, flat: true, originalBlend: mouthOriginalBlend);
 
             // The fang box sits INSIDE the mouth box, so a Mouth colour would swallow the fangs unless
@@ -355,7 +355,7 @@ namespace FangtasticPalette
             if (faceColor.HasValue || earsColor.HasValue)
             {
                 var faceOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.FaceIntensity.Value);
-                regions.Add(new TextureRecolor.SpatialRegion(
+                regions.Add(new SpatialRegion(
                     faceColor,
                     FaceBox.UMin, FaceBox.UMax, FaceBox.VMin, FaceBox.VMax,
                     flat: true, alwaysClaim: true, ellipse: true,

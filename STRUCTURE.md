@@ -45,8 +45,8 @@ ENGINE                                        UI (wardrobe)
 |---|---|---|---|
 | **Plugin** | BepInEx entry; binds every config value; wires live-apply; installs Harmony + reapplier | `src/Plugin.cs` | BepInEx, Harmony |
 | **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original textures | `src/BatColorPatch.cs` (656) | TextureRecolor, Plugin statics |
-| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; result cache | `src/TextureRecolor.cs` (514) | UnityEngine, RecolorSpecs |
-| **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours | `src/RecolorSpecs.cs` | UnityEngine, TextureRecolor.SpatialRegion |
+| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; result cache | `src/TextureRecolor.cs` (460) | UnityEngine, RecolorSpecs |
+| **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours. Also holds the bat-body `SpatialRegion` (its only consumer is `SkinPaletteSpec`) | `src/RecolorSpecs.cs` | UnityEngine |
 | **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit) | `src/BatColorReapplier.cs` | BatColorPatch |
 | **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel; hides VFX/bloom | `src/BatFormWardrobe.cs` (497) | BatColorPatch, BatFormColorPanel, TabIcon, PreviewBloomSuppressor |
 | **Colour panel** | Builds the scrollable swatch/slider/toggle panel; selection state; opens the picker | `src/BatFormColorPanel.cs` (753) | BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
@@ -115,9 +115,11 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   `RecolorTextureCache` + `RendererOverrideStore` with explicit purge on teardown. *(Deferred: has a
   correctness angle; see BACKLOG.)*
 - **P2 — Engine vs bat-specific code welded in `TextureRecolor.cs`.** The generic HSV engine (meant
-  to be copied verbatim to the next mod) and the bat-only palette-remap/UV-compositing live in one
-  file, so porting means hand-picking lines. Split into `TextureRecolor.cs` (generic) +
-  `BatBodyPaletteRemap.cs` (bat-only). Pairs with the mermaid port.
+  to be copied verbatim to the next mod) and the bat-only palette-remap/UV-compositing (`GetOrBuildBatBody`)
+  still live in one file, so porting means hand-picking lines. Split into `TextureRecolor.cs` (generic) +
+  `BatBodyPaletteRemap.cs` (bat-only). Pairs with the mermaid port. *(Partly seamed 2026-08-22: the
+  bat-only `SpatialRegion` moved to `RecolorSpecs.cs` next to `SkinPaletteSpec`, so the engine no longer
+  back-references it — the eventual split's bat-only spec+region pieces already sit together.)*
 - **P2 — `BatColorPatch.cs` (656 lines)** bundles Harmony routing with three self-contained appliers
   (body/eye/wing-dust), each with its own caches + constant block. Extractable along the existing
   comment-delimited seams; Codex judged it "large but not yet a God-file" — lower priority than the

@@ -50,7 +50,11 @@ _None._ The review found no P0 structural rot.
 ## Done (2026-08-22)
 - [x] **`TextureRecolor` parameter-object refactor** (P1). `EyeRecolorSpec`/`SkinPaletteSpec` in new
   `src/RecolorSpecs.cs`; specs own their cache `Key`. Killed the `hex`-proxy cache key and the
-  redundant `cacheDiscriminator`. Engine 544→514 lines; builds clean. *In-game verify still pending.*
+  redundant `cacheDiscriminator`. Engine 544→460 lines; builds clean. Verified in-game (Body/Eyes
+  remap ran, no exceptions). **Structure-review follow-ups (same day):** moved bat-only `SpatialRegion`
+  into `RecolorSpecs.cs` to break a spec↔engine dependency cycle (componentization lens); added a
+  `KeyFormat` helper so all cache keys serialise colours losslessly and floats culture-invariantly
+  (Codex sign-off — was latent/pre-existing, hardened now that key-building is centralised).
 - [x] Install the pre-push structure-review gate + bootstrap the living-doc set.
 - [x] Remove dead `Templates.CloneButton` + its exclusive `SetLabel` helper (port residue).
 - [x] Fix misleading user-visible cat log strings + the most misleading stale comments

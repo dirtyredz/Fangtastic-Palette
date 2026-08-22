@@ -195,60 +195,6 @@ namespace FangtasticPalette
         /// uses a high floor (its albedo is dark, so it must recolour at full brightness).
         /// "Warm" is a circular hue window (skinHueCenter +/- skinHueRange) at >= skinMinSaturation.
         /// </summary>
-        /// <summary>
-        /// A rectangular patch of the texture (in UV space) recoloured toward its own colour - the
-        /// way features that can't be told apart by colour (fangs, nose, mouth, a face patch) get
-        /// their own control. Flat paints the colour solid; otherwise it keeps the source's shading.
-        /// </summary>
-        internal readonly struct SpatialRegion
-        {
-            internal SpatialRegion(Color? color, float uMin, float uMax, float vMin, float vMax, bool flat,
-                bool alwaysClaim = false, bool ellipse = false, float feather = 0f, float originalBlend = 0f)
-            {
-                Color = color;
-                UMin = uMin;
-                UMax = uMax;
-                VMin = vMin;
-                VMax = vMax;
-                Flat = flat;
-                AlwaysClaim = alwaysClaim;
-                Ellipse = ellipse;
-                Feather = feather;
-                OriginalBlend = originalBlend;
-            }
-
-            internal Color? Color { get; }
-            internal float UMin { get; }
-            internal float UMax { get; }
-            internal float VMin { get; }
-            internal float VMax { get; }
-            internal bool Flat { get; }
-
-            // When true the box claims its pixels even with no colour set (leaving them ORIGINAL),
-            // carving that region out of the later hue/value bands. Used to keep the ears colour off
-            // the face: the Face box always claims, so the ears colour never reaches it.
-            internal bool AlwaysClaim { get; }
-
-            // When true the region is the ELLIPSE inscribed in its box rather than the full rectangle,
-            // so it matches a round feature (the face) without square corners spilling into the skin.
-            internal bool Ellipse { get; }
-
-            // Soft edge (0..~0.5): the region fades from full coverage in its centre to 0 at its edge
-            // over this fraction, so the boundary is a gradient into the surrounding skin, not a hard
-            // cut. Used on the face and body ellipses.
-            internal float Feather { get; }
-
-            // Blends the region's recoloured result back toward the original texture by this amount
-            // (0 = full recolour, 1 = untouched original) - the "intensity" fade for the face oval,
-            // applied before the feather composites the region over the base.
-            internal float OriginalBlend { get; }
-
-            internal string Key => Color.HasValue || AlwaysClaim
-                ? $"{Color?.ToString() ?? "orig"}:{UMin:R},{UMax:R},{VMin:R},{VMax:R}," +
-                  $"{(Flat ? 1 : 0)},{(AlwaysClaim ? 1 : 0)},{(Ellipse ? 1 : 0)},{Feather:R},{OriginalBlend:R}"
-                : "-";
-        }
-
         internal static Texture2D GetOrBuildBatBody(Texture source, in SkinPaletteSpec spec)
         {
             var cacheKey = spec.Key;

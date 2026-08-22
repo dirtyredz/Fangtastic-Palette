@@ -1,7 +1,24 @@
+using System.Globalization;
 using UnityEngine;
 
 namespace FangtasticPalette
 {
+    /// <summary>
+    /// Lossless, culture-invariant serialization for the recolour cache keys. Two things a naive
+    /// <c>Color.ToString()</c> / <c>float.ToString("R")</c> get wrong for a machine key:
+    /// <c>Color.ToString()</c> rounds each component to 3 dp (so two near-identical picked colours
+    /// could share a cache entry), and the default <c>"R"</c> format is culture-sensitive (a
+    /// decimal-comma locale would emit commas that blur the comma-separated fields in a region key).
+    /// Every key field goes through here so identity is exact and stable regardless of locale.
+    /// </summary>
+    internal static class KeyFormat
+    {
+        internal static string F(float v) => v.ToString("R", CultureInfo.InvariantCulture);
+
+        internal static string Col(Color? c) => c is Color k
+            ? F(k.r) + "," + F(k.g) + "," + F(k.b) + "," + F(k.a)
+            : "-";
+    }
     /// <summary>
     /// Parameter object for <see cref="TextureRecolor.GetOrBuild"/> - the HSV colorize + eye
     /// brightness-split path. Groups the classifier/mask/floor knobs that used to be ~17 loose
@@ -117,11 +134,68 @@ namespace FangtasticPalette
         // instance id separately). Folds in every field, target included, so the cache never
         // collides two distinct recolours - the correctness fix this value type exists for.
         internal string Key => string.Join("|",
-            Target.ToString(), SplitBelowSaturation.ToString("R"),
-            HighlightColor?.ToString() ?? "-", BrightnessFloor.ToString("R"), SplitBelowValue.ToString("R"),
-            PupilColor?.ToString() ?? "-", PassHueCenter.ToString("R"), PassHueRange.ToString("R"),
-            PassMinSaturation.ToString("R"), SplitAboveValue.ToString("R"), GlintColor?.ToString() ?? "-",
-            GlintUMin.ToString("R"), GlintUMax.ToString("R"), GlintVMin.ToString("R"), GlintVMax.ToString("R"));
+            KeyFormat.Col(Target), KeyFormat.F(SplitBelowSaturation),
+            KeyFormat.Col(HighlightColor), KeyFormat.F(BrightnessFloor), KeyFormat.F(SplitBelowValue),
+            KeyFormat.Col(PupilColor), KeyFormat.F(PassHueCenter), KeyFormat.F(PassHueRange),
+            KeyFormat.F(PassMinSaturation), KeyFormat.F(SplitAboveValue), KeyFormat.Col(GlintColor),
+            KeyFormat.F(GlintUMin), KeyFormat.F(GlintUMax), KeyFormat.F(GlintVMin), KeyFormat.F(GlintVMax));
+    }
+
+    /// <summary>
+    /// A rectangular patch of the texture (in UV space) recoloured toward its own colour - the
+    /// way features that can't be told apart by colour (fangs, nose, mouth, a face patch) get
+    /// their own control. Flat paints the colour solid; otherwise it keeps the source's shading.
+    /// Bat-body-specific: only <see cref="SkinPaletteSpec"/> / <see cref="TextureRecolor.GetOrBuildBatBody"/>
+    /// use it, so it lives here with the spec rather than in the (to-be-generic) engine file.
+    /// </summary>
+    internal readonly struct SpatialRegion
+    {
+        internal SpatialRegion(Color? color, float uMin, float uMax, float vMin, float vMax, bool flat,
+            bool alwaysClaim = false, bool ellipse = false, float feather = 0f, float originalBlend = 0f)
+        {
+            Color = color;
+            UMin = uMin;
+            UMax = uMax;
+            VMin = vMin;
+            VMax = vMax;
+            Flat = flat;
+            AlwaysClaim = alwaysClaim;
+            Ellipse = ellipse;
+            Feather = feather;
+            OriginalBlend = originalBlend;
+        }
+
+        internal Color? Color { get; }
+        internal float UMin { get; }
+        internal float UMax { get; }
+        internal float VMin { get; }
+        internal float VMax { get; }
+        internal bool Flat { get; }
+
+        // When true the box claims its pixels even with no colour set (leaving them ORIGINAL),
+        // carving that region out of the later hue/value bands. Used to keep the ears colour off
+        // the face: the Face box always claims, so the ears colour never reaches it.
+        internal bool AlwaysClaim { get; }
+
+        // When true the region is the ELLIPSE inscribed in its box rather than the full rectangle,
+        // so it matches a round feature (the face) without square corners spilling into the skin.
+        internal bool Ellipse { get; }
+
+        // Soft edge (0..~0.5): the region fades from full coverage in its centre to 0 at its edge
+        // over this fraction, so the boundary is a gradient into the surrounding skin, not a hard
+        // cut. Used on the face and body ellipses.
+        internal float Feather { get; }
+
+        // Blends the region's recoloured result back toward the original texture by this amount
+        // (0 = full recolour, 1 = untouched original) - the "intensity" fade for the face oval,
+        // applied before the feather composites the region over the base.
+        internal float OriginalBlend { get; }
+
+        internal string Key => Color.HasValue || AlwaysClaim
+            ? $"{(Color.HasValue ? KeyFormat.Col(Color) : "orig")}:" +
+              $"{KeyFormat.F(UMin)},{KeyFormat.F(UMax)},{KeyFormat.F(VMin)},{KeyFormat.F(VMax)}," +
+              $"{(Flat ? 1 : 0)},{(AlwaysClaim ? 1 : 0)},{(Ellipse ? 1 : 0)},{KeyFormat.F(Feather)},{KeyFormat.F(OriginalBlend)}"
+            : "-";
     }
 
     /// <summary>
@@ -145,7 +219,7 @@ namespace FangtasticPalette
             Color? bodyColor, Color? rimColor, Color? beigeColor, Color? brownColor,
             float bodyFloor, float skinHueCenter, float skinHueRange, float skinMinSaturation,
             float rimValue, float beigeMinValue, float beigeBlendBand, float bodyEdgeSoftness,
-            float skinOriginalBlend, TextureRecolor.SpatialRegion[] regions, bool skinAsBody,
+            float skinOriginalBlend, SpatialRegion[] regions, bool skinAsBody,
             float bodyOriginalBlend,
             float earUMin = 0f, float earUMax = 1f, float earVMin = 0f, float earVMax = 1f)
         {
@@ -184,7 +258,7 @@ namespace FangtasticPalette
         internal float BeigeBlendBand { get; }
         internal float BodyEdgeSoftness { get; }
         internal float SkinOriginalBlend { get; }
-        internal TextureRecolor.SpatialRegion[] Regions { get; }
+        internal SpatialRegion[] Regions { get; }
         internal bool SkinAsBody { get; }
         internal float BodyOriginalBlend { get; }
         internal float EarUMin { get; }
@@ -202,13 +276,13 @@ namespace FangtasticPalette
                     ? "-"
                     : string.Join(";", System.Array.ConvertAll(Regions, r => r.Key));
                 return string.Join("|",
-                    BodyColor?.ToString() ?? "-", RimColor?.ToString() ?? "-", BeigeColor?.ToString() ?? "-",
-                    BrownColor?.ToString() ?? "-", BodyFloor.ToString("R"),
-                    SkinHueCenter.ToString("R"), SkinHueRange.ToString("R"), SkinMinSaturation.ToString("R"),
-                    RimValue.ToString("R"), BeigeMinValue.ToString("R"), BeigeBlendBand.ToString("R"),
-                    BodyEdgeSoftness.ToString("R"), SkinOriginalBlend.ToString("R"), regionKey,
-                    SkinAsBody ? "1" : "0", BodyOriginalBlend.ToString("R"),
-                    EarUMin.ToString("R"), EarUMax.ToString("R"), EarVMin.ToString("R"), EarVMax.ToString("R"));
+                    KeyFormat.Col(BodyColor), KeyFormat.Col(RimColor), KeyFormat.Col(BeigeColor),
+                    KeyFormat.Col(BrownColor), KeyFormat.F(BodyFloor),
+                    KeyFormat.F(SkinHueCenter), KeyFormat.F(SkinHueRange), KeyFormat.F(SkinMinSaturation),
+                    KeyFormat.F(RimValue), KeyFormat.F(BeigeMinValue), KeyFormat.F(BeigeBlendBand),
+                    KeyFormat.F(BodyEdgeSoftness), KeyFormat.F(SkinOriginalBlend), regionKey,
+                    SkinAsBody ? "1" : "0", KeyFormat.F(BodyOriginalBlend),
+                    KeyFormat.F(EarUMin), KeyFormat.F(EarUMax), KeyFormat.F(EarVMin), KeyFormat.F(EarVMax));
             }
         }
     }
