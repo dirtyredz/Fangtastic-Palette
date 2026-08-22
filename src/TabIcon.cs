@@ -45,19 +45,14 @@ namespace FangtasticPalette
                     return DefaultIcon();
                 }
 
-                var data = File.ReadAllBytes(path);
-                var texture = NewIconTexture();
-
-                // LoadImage resizes the texture to the PNG's dimensions and decodes it (alpha kept).
-                if (ImageConversion.LoadImage(texture, data))
+                cached = SpriteFromPng(File.ReadAllBytes(path));
+                if (cached != null)
                 {
-                    cached = ToSprite(texture);
                     FangtasticPalettePlugin.Log.LogInfo(
-                        $"[FangtasticPalette] Wardrobe: loaded custom tab icon {texture.width}x{texture.height} from '{path}'.");
+                        $"[FangtasticPalette] Wardrobe: loaded custom tab icon {cached.texture.width}x{cached.texture.height} from '{path}'.");
                 }
                 else
                 {
-                    UnityEngine.Object.Destroy(texture);
                     FangtasticPalettePlugin.Log.LogWarning(
                         $"[FangtasticPalette] Wardrobe: '{path}' is not a decodable PNG - using the built-in bat icon.");
                 }
@@ -95,17 +90,14 @@ namespace FangtasticPalette
                         return PawSprite.Get();
                     }
 
-                    var data = ReadAll(stream);
-                    var texture = NewIconTexture();
-                    if (ImageConversion.LoadImage(texture, data))
+                    embeddedDefault = SpriteFromPng(ReadAll(stream));
+                    if (embeddedDefault != null)
                     {
-                        embeddedDefault = ToSprite(texture);
                         FangtasticPalettePlugin.Log.LogInfo(
-                            $"[FangtasticPalette] Wardrobe: using the built-in bat icon {texture.width}x{texture.height}.");
+                            $"[FangtasticPalette] Wardrobe: using the built-in bat icon {embeddedDefault.texture.width}x{embeddedDefault.texture.height}.");
                     }
                     else
                     {
-                        UnityEngine.Object.Destroy(texture);
                         FangtasticPalettePlugin.Log.LogWarning(
                             "[FangtasticPalette] Wardrobe: the embedded bat icon is not a decodable PNG - using the generated glyph.");
                     }
@@ -135,6 +127,35 @@ namespace FangtasticPalette
             }
 
             return data;
+        }
+
+        /// <summary>
+        /// Decodes PNG bytes into a sprite, or null if the data isn't a decodable PNG. Destroys the
+        /// scratch texture on any failure - a false result OR an exception - so it can never leak.
+        /// </summary>
+        private static Sprite SpriteFromPng(byte[] data)
+        {
+            var texture = NewIconTexture();
+            var ok = false;
+            try
+            {
+                // LoadImage resizes the texture to the PNG's dimensions and decodes it (alpha kept).
+                if (ImageConversion.LoadImage(texture, data))
+                {
+                    var sprite = ToSprite(texture);
+                    ok = true;
+                    return sprite;
+                }
+
+                return null;
+            }
+            finally
+            {
+                if (!ok)
+                {
+                    UnityEngine.Object.Destroy(texture);
+                }
+            }
         }
 
         private static Texture2D NewIconTexture() => new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false)
