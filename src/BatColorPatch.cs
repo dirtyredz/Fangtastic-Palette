@@ -396,12 +396,11 @@ namespace FangtasticPalette
             // own shading preserved and softened by Ear Intensity: 1 = full flat colour, lower fades
             // toward the original shading, so skinOriginalBlend = 1 - EarIntensity).
             var skinOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.EarIntensity.Value);
-            var cacheDiscriminator = $"{bodyHex}/{earsHex}/{skinAsBody}/{bodyOriginalBlend:R}/{skinOriginalBlend:R}";
-            var recolored = TextureRecolor.GetOrBuildBatBody(
-                OriginalTextures[key], cacheDiscriminator, bodyColor, earsColor, earsColor, earsColor,
+            var recolored = TextureRecolor.GetOrBuildBatBody(OriginalTextures[key], new SkinPaletteSpec(
+                bodyColor, earsColor, earsColor, earsColor,
                 BodyBrightnessFloor, SkinHueCenter, SkinHueRange, SkinMinSaturation, RimValue, BeigeMinValue,
                 BeigeBlendBand, BodyEdgeSoftness, skinOriginalBlend, regionArray,
-                skinAsBody, bodyOriginalBlend, EarBox.UMin, EarBox.UMax, EarBox.VMin, EarBox.VMax);
+                skinAsBody, bodyOriginalBlend, EarBox.UMin, EarBox.UMax, EarBox.VMin, EarBox.VMax));
 
             material.SetTexture(texProperty, recolored);
             // The regenerated texture already encodes every colour via source luminance, so the
@@ -486,8 +485,8 @@ namespace FangtasticPalette
                     // EyeColor (nullable: null leaves the mid band original), glintColor is the
                     // Eye Highlight, pupilColor is the pupil. Floor 1 so the picked colours land at
                     // full brightness. The 'target' arg is unused (saturated branch never runs).
-                    var recolored = TextureRecolor.GetOrBuild(
-                        OriginalTextures[key], $"{eyeHex}/{pupilHex}/{highlightHex}", eyeColor ?? Color.black,
+                    var recolored = TextureRecolor.GetOrBuild(OriginalTextures[key], new EyeRecolorSpec(
+                        eyeColor ?? Color.black,
                         splitBelowSaturation: 2f,
                         highlightColor: eyeColor,
                         brightnessFloor: 1f,
@@ -496,7 +495,7 @@ namespace FangtasticPalette
                         splitAboveValue: EyeHighlightValue,
                         glintColor: highlightColor,
                         glintUMin: EyeGlintUMin, glintUMax: EyeGlintUMax,
-                        glintVMin: EyeGlintVMin, glintVMax: EyeGlintVMax);
+                        glintVMin: EyeGlintVMin, glintVMax: EyeGlintVMax));
                     material.SetTexture(texProperty, recolored);
                     if (tintProperty != null)
                     {

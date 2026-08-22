@@ -26,87 +26,48 @@ namespace FangtasticPalette
     /// </summary>
     internal static class TextureRecolor
     {
-        // String-keyed because the parameter set has grown past a comfortable ValueTuple arity
-        // (hue passthrough added three more). The key folds in the texture's instance id and every
-        // recolour parameter, so any change produces a distinct cache entry.
+        // String-keyed: each entry's key is the source texture's instance id folded together with
+        // the recolour spec's own Key (EyeRecolorSpec / SkinPaletteSpec), which covers every field.
+        // Any change to source or spec produces a distinct entry, so the cache can never collide two
+        // genuinely different recolours.
         private static readonly Dictionary<string, Texture2D> Cache = new Dictionary<string, Texture2D>();
 
-        /// <param name="splitBelowSaturation">
-        /// Source pixels whose HSV saturation is at or below this are treated as the separate
-        /// "pupil" region; everything else takes the main target colour. Saturation, not
-        /// brightness, is the right axis on a GradientAtlas swatch texture: within a strip the
-        /// VALUE varies top-to-bottom while hue/saturation stay ~constant, so a luminance split
-        /// slices across the gradient instead of between strips.
-        ///
-        /// Pass a NEGATIVE value to disable the split - not 0. Saturation is exactly 0 for any
-        /// pure black/grey pixel, so a 0 threshold still matches every such pixel and copies it
-        /// through unrecoloured.
-        /// </param>
-        /// <param name="highlightColor">
-        /// What the desaturated-and-BRIGHT region is remapped toward. Null leaves those pixels
-        /// exactly as they were.
-        /// </param>
-        /// <param name="splitBelowValue">
-        /// Within the desaturated region, pixels at or below this HSV value are the actual pupil
-        /// rather than the highlight. Saturation alone cannot tell these apart: a white highlight
-        /// and a black pupil are both fully desaturated. Pass a negative value to disable the
-        /// pupil split, leaving the whole desaturated region as highlight.
-        /// </param>
-        /// <param name="pupilColor">
-        /// What the desaturated-and-DARK region is remapped toward. Null leaves those pixels
-        /// exactly as they were.
-        /// </param>
-        /// <param name="brightnessFloor">
-        /// Source value is remapped from [0, 1] to [brightnessFloor, 1], then multiplied by the
-        /// TARGET colour's own value - so the output is always anchored to how bright the colour
-        /// you actually picked is, not an independent brightness computed from the floor alone.
-        /// 0 = no floor, full original shading range preserved.
-        /// </param>
-        /// <param name="passHueCenter">
-        /// Hue (0..1) of a region to LEAVE UNTOUCHED - passed through at its original colour instead
-        /// of recoloured. Negative disables passthrough. This is how one shared atlas can recolour
-        /// only some of its regions: the bat's whole body is one texture, so recolouring the navy
-        /// toward Body Color while passing the pink ears/skin (a distinct hue) through is what keeps
-        /// their definition instead of flattening the whole creature to one colour. Circular
-        /// distance, so a centre near 1.0 correctly matches hues that wrap past 0 (pink/red).
-        /// </param>
-        /// <param name="passHueRange">Half-width (0..1) of the passthrough hue window.</param>
-        /// <param name="passMinSaturation">
-        /// Only pixels at least this saturated are eligible for passthrough - near-grey pixels have
-        /// an unreliable hue, and the body's own dark/desaturated pixels must still recolour.
-        /// </param>
-        internal static Texture2D GetOrBuild(
-            Texture source, string hex, Color target, float splitBelowSaturation = -1f, Color? highlightColor = null,
-            float brightnessFloor = 0f, float splitBelowValue = -1f, Color? pupilColor = null,
-            float passHueCenter = -1f, float passHueRange = 0f, float passMinSaturation = 0f,
-            float splitAboveValue = 2f, Color? glintColor = null,
-            float glintUMin = 0f, float glintUMax = 1f, float glintVMin = 0f, float glintVMax = 1f)
+        /// <summary>
+        /// HSV colorize + eye brightness-split. All the classifier/mask/floor knobs live on
+        /// <see cref="EyeRecolorSpec"/>, which also owns the cache identity (see its docs). The
+        /// engine folds the source texture's instance id in on top of the spec's key.
+        /// </summary>
+        internal static Texture2D GetOrBuild(Texture source, in EyeRecolorSpec spec)
         {
-            var key = string.Join("|",
-                source.GetInstanceID().ToString(), hex, splitBelowSaturation.ToString("R"),
-                highlightColor?.ToString() ?? "-", brightnessFloor.ToString("R"), splitBelowValue.ToString("R"),
-                pupilColor?.ToString() ?? "-", passHueCenter.ToString("R"), passHueRange.ToString("R"),
-                passMinSaturation.ToString("R"), splitAboveValue.ToString("R"), glintColor?.ToString() ?? "-",
-                glintUMin.ToString("R"), glintUMax.ToString("R"), glintVMin.ToString("R"), glintVMax.ToString("R"));
+            var key = source.GetInstanceID() + "|" + spec.Key;
             if (Cache.TryGetValue(key, out var cached) && cached != null)
             {
                 return cached;
             }
 
-            var result = Build(source, target, hex, splitBelowSaturation, highlightColor, brightnessFloor,
-                splitBelowValue, pupilColor, passHueCenter, passHueRange, passMinSaturation, splitAboveValue, glintColor,
-                glintUMin, glintUMax, glintVMin, glintVMax);
+            var result = Build(source, spec, key);
             Cache[key] = result;
             return result;
         }
 
-        private static Texture2D Build(
-            Texture source, Color target, string cacheKey, float splitBelowSaturation, Color? highlightColor,
-            float brightnessFloor, float splitBelowValue, Color? pupilColor,
-            float passHueCenter, float passHueRange, float passMinSaturation,
-            float splitAboveValue, Color? glintColor,
-            float glintUMin, float glintUMax, float glintVMin, float glintVMax)
+        private static Texture2D Build(Texture source, in EyeRecolorSpec spec, string cacheKey)
         {
+            var target = spec.Target;
+            var splitBelowSaturation = spec.SplitBelowSaturation;
+            var highlightColor = spec.HighlightColor;
+            var brightnessFloor = spec.BrightnessFloor;
+            var splitBelowValue = spec.SplitBelowValue;
+            var pupilColor = spec.PupilColor;
+            var passHueCenter = spec.PassHueCenter;
+            var passHueRange = spec.PassHueRange;
+            var passMinSaturation = spec.PassMinSaturation;
+            var splitAboveValue = spec.SplitAboveValue;
+            var glintColor = spec.GlintColor;
+            var glintUMin = spec.GlintUMin;
+            var glintUMax = spec.GlintUMax;
+            var glintVMin = spec.GlintVMin;
+            var glintVMax = spec.GlintVMax;
+
             var width = source.width;
             var height = source.height;
             var sourcePixels = ReadPixelsRobust(source, width, height);
@@ -288,26 +249,35 @@ namespace FangtasticPalette
                 : "-";
         }
 
-        internal static Texture2D GetOrBuildBatBody(
-            Texture source, string cacheKey, Color? bodyColor, Color? rimColor, Color? beigeColor, Color? brownColor,
-            float bodyFloor, float skinHueCenter, float skinHueRange, float skinMinSaturation,
-            float rimValue, float beigeMinValue, float beigeBlendBand, float bodyEdgeSoftness,
-            float skinOriginalBlend, SpatialRegion[] regions, bool skinAsBody, float bodyOriginalBlend,
-            float earUMin = 0f, float earUMax = 1f, float earVMin = 0f, float earVMax = 1f)
+        internal static Texture2D GetOrBuildBatBody(Texture source, in SkinPaletteSpec spec)
         {
-            var regionKey = regions == null ? "-" : string.Join(";", System.Array.ConvertAll(regions, r => r.Key));
-            var key = string.Join("|", "batbody", source.GetInstanceID().ToString(),
-                bodyColor?.ToString() ?? "-", rimColor?.ToString() ?? "-", beigeColor?.ToString() ?? "-",
-                brownColor?.ToString() ?? "-", bodyFloor.ToString("R"),
-                skinHueCenter.ToString("R"), skinHueRange.ToString("R"), skinMinSaturation.ToString("R"),
-                rimValue.ToString("R"), beigeMinValue.ToString("R"), beigeBlendBand.ToString("R"),
-                bodyEdgeSoftness.ToString("R"), skinOriginalBlend.ToString("R"), regionKey,
-                skinAsBody ? "1" : "0", bodyOriginalBlend.ToString("R"),
-                earUMin.ToString("R"), earUMax.ToString("R"), earVMin.ToString("R"), earVMax.ToString("R"), cacheKey);
+            var cacheKey = spec.Key;
+            var key = "batbody|" + source.GetInstanceID() + "|" + cacheKey;
             if (Cache.TryGetValue(key, out var cached) && cached != null)
             {
                 return cached;
             }
+
+            var bodyColor = spec.BodyColor;
+            var rimColor = spec.RimColor;
+            var beigeColor = spec.BeigeColor;
+            var brownColor = spec.BrownColor;
+            var bodyFloor = spec.BodyFloor;
+            var skinHueCenter = spec.SkinHueCenter;
+            var skinHueRange = spec.SkinHueRange;
+            var skinMinSaturation = spec.SkinMinSaturation;
+            var rimValue = spec.RimValue;
+            var beigeMinValue = spec.BeigeMinValue;
+            var beigeBlendBand = spec.BeigeBlendBand;
+            var bodyEdgeSoftness = spec.BodyEdgeSoftness;
+            var skinOriginalBlend = spec.SkinOriginalBlend;
+            var regions = spec.Regions;
+            var skinAsBody = spec.SkinAsBody;
+            var bodyOriginalBlend = spec.BodyOriginalBlend;
+            var earUMin = spec.EarUMin;
+            var earUMax = spec.EarUMax;
+            var earVMin = spec.EarVMin;
+            var earVMax = spec.EarVMax;
 
             var width = source.width;
             var height = source.height;

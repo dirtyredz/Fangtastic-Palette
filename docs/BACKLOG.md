@@ -7,10 +7,12 @@ Prioritized trough of deferred work. Most items came from the **2026-08-22 full 
 _None._ The review found no P0 structural rot.
 
 ## P1 — worth doing
-- [ ] **`TextureRecolor` parameter-object refactor.** Replace the ~17/~22-param `GetOrBuild` /
-  `GetOrBuildBatBody` with `EyeRecolorSpec` / `SkinPaletteSpec` value types that own their cache
-  identity. Fixes the fragile `hex`-proxy cache key (`target` isn't in the key) and the redundant
-  `cacheDiscriminator`. *Wants in-game recolour verification.*
+- [x] **`TextureRecolor` parameter-object refactor.** ✅ 2026-08-22 — `GetOrBuild` /
+  `GetOrBuildBatBody` now take `EyeRecolorSpec` / `SkinPaletteSpec` value types (new
+  `src/RecolorSpecs.cs`) that own their cache identity via a `Key` property. Fixed the fragile
+  `hex`-proxy cache key (`target` is now folded into the key) and removed the redundant caller-built
+  `cacheDiscriminator`. Behaviour-preserving by construction (pixel loops byte-identical; cache keys
+  equivalent-or-more-precise). *Still wants in-game recolour verification before the next release.*
 - [ ] **Split `BatFormColorPanel.cs` (753 lines).** Extract a declarative `ColorControlSpec` (kills the
   label-string `switch`), a `SwatchGrid`/`SwatchView` (cloned-vs-drawn fallback + refresh), and reusable
   slider/toggle row builders. *Wants in-game layout verification.*
@@ -46,6 +48,9 @@ _None._ The review found no P0 structural rot.
   since each mod is a standalone repo.
 
 ## Done (2026-08-22)
+- [x] **`TextureRecolor` parameter-object refactor** (P1). `EyeRecolorSpec`/`SkinPaletteSpec` in new
+  `src/RecolorSpecs.cs`; specs own their cache `Key`. Killed the `hex`-proxy cache key and the
+  redundant `cacheDiscriminator`. Engine 544→514 lines; builds clean. *In-game verify still pending.*
 - [x] Install the pre-push structure-review gate + bootstrap the living-doc set.
 - [x] Remove dead `Templates.CloneButton` + its exclusive `SetLabel` helper (port residue).
 - [x] Fix misleading user-visible cat log strings + the most misleading stale comments

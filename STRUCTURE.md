@@ -13,7 +13,7 @@ Two cooperating layers, cleanly separated (verified: the engine never references
 - **Wardrobe UI** — injects a "Bat Form" tab into the mirror's wardrobe with a live preview, swatch
   pickers, sliders, and an RGB colour picker, all cloned from the game's own widgets.
 
-Source is flat in `src/` (no `src/FangtasticPalette/`), 18 files, ~4,300 lines. It is the second entry
+Source is flat in `src/` (no `src/FangtasticPalette/`), 19 files, ~4,300 lines. It is the second entry
 in the "…tastic Palette" set after the sibling **PurrtasticPalette** (cat); much of the machinery is a
 port, and a third (Fintastic / mermaid) is planned to reuse it again.
 
@@ -45,7 +45,8 @@ ENGINE                                        UI (wardrobe)
 |---|---|---|---|
 | **Plugin** | BepInEx entry; binds every config value; wires live-apply; installs Harmony + reapplier | `src/Plugin.cs` | BepInEx, Harmony |
 | **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original textures | `src/BatColorPatch.cs` (656) | TextureRecolor, Plugin statics |
-| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; result cache | `src/TextureRecolor.cs` (544) | UnityEngine only |
+| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; result cache | `src/TextureRecolor.cs` (514) | UnityEngine, RecolorSpecs |
+| **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours | `src/RecolorSpecs.cs` | UnityEngine, TextureRecolor.SpatialRegion |
 | **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit) | `src/BatColorReapplier.cs` | BatColorPatch |
 | **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel; hides VFX/bloom | `src/BatFormWardrobe.cs` (497) | BatColorPatch, BatFormColorPanel, TabIcon, PreviewBloomSuppressor |
 | **Colour panel** | Builds the scrollable swatch/slider/toggle panel; selection state; opens the picker | `src/BatFormColorPanel.cs` (753) | BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
@@ -89,13 +90,13 @@ cross-model). The mod is broadly well-shaped for its size — engine/UI layering
 wrong-direction dependencies, small helpers are correctly one-job-per-file. No P0 rot. The items
 below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a blocker.
 
-- **P1 — `TextureRecolor` parameter explosion.** `GetOrBuild` (~17 params) and `GetOrBuildBatBody`
-  (~22 params) leak every classifier/mask/floor into callers; the doc comment itself apologises for
-  the arity. Wants parameter-object value types (`EyeRecolorSpec`, `SkinPaletteSpec`) that own their
-  own cache identity — which also fixes the fragile `hex`-proxy cache key (`target` is not in the key;
-  safe today only because the eye path forces the desaturated branch) and the redundant
-  caller-supplied `cacheDiscriminator`. *(Deferred: touches the pixel engine; wants in-game recolour
-  verification.)*
+- **P1 — `TextureRecolor` parameter explosion. ✅ RESOLVED 2026-08-22.** `GetOrBuild` and
+  `GetOrBuildBatBody` now take `EyeRecolorSpec` / `SkinPaletteSpec` parameter objects (new
+  `src/RecolorSpecs.cs`), each owning its cache identity via a `Key` property. This fixed the fragile
+  `hex`-proxy cache key (`target` is now folded into `EyeRecolorSpec.Key`) and removed the redundant
+  caller-supplied `cacheDiscriminator`. Behaviour-preserving: the pixel loops are byte-identical
+  (specs unpack to the same locals at the top). *In-game recolour verification still pending before
+  the next release.*
 - **P1 — `BatFormColorPanel.cs` (753 lines) is a God-file.** Screen composition + layout arithmetic +
   three widget builders (swatch/slider/toggle) + two swatch implementations + picker wiring +
   selection state. Extract: declarative `ColorControlSpec` (kills the label-string `switch`), a
