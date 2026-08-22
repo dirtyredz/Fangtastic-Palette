@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <AssemblyName>FangtasticPalette</AssemblyName>
     <RootNamespace>FangtasticPalette</RootNamespace>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <ModDeployPath>$(MoonlightPeaksPluginDeployPath)\FangtasticPalette</ModDeployPath>
     <!-- The game ships its own copies of every assembly below; never copy them next to the plugin. -->
@@ -91,6 +91,16 @@
       <HintPath>$(MoonlightPeaksManagedPath)\LittleChickenGameCompany.Chicken-UI.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- The default Bat Form tab icon, embedded so it ships inside the DLL - the release zip
+       (pack.ps1) bundles only the DLL, so a built-in default has to live within it. A user PNG at
+       BepInEx/config/FangtasticPalette/tab-icon.png still overrides it. LogicalName pins the
+       resource name regardless of the file's on-disk folder. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\assets\tab-icon.png">
+      <LogicalName>FangtasticPalette.tab-icon.png</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
   <Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true'">

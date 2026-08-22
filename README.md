@@ -60,9 +60,9 @@ The panel feeds itself into the wardrobe screen's own `ScrollRect` (mouse wheel 
 than building a clip mask. There is a **Freeze Flap** toggle at the top of the panel to hold the
 preview bat still while you judge colours; it affects only the preview, not the game.
 
-The **Bat Form** tab shows a bat icon. Drop a PNG at
-`BepInEx/config/FangtasticPalette/tab-icon.png` to override it (transparent, square, ~256px, art
-kept within a centred circle since the tab is a diamond); without one, a generated bat glyph is used.
+The **Bat Form** tab shows a bat icon, bundled inside the plugin so it appears on a fresh install
+with no setup. Drop a PNG at `BepInEx/config/FangtasticPalette/tab-icon.png` to override it
+(transparent, square, ~256px, art kept within a centred circle since the tab is a diamond).
 
 ## Status
 

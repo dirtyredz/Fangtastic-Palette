@@ -25,10 +25,10 @@ What the mod does. Status: ✅ shipped · 🛠 partial · 📋 planned.
 - ✅ **Decorated headers** cloned from the game's category header.
 - ✅ **Revert-on-cancel** — picks preview live but only stick on Confirm (colours). *(⚠ intensity/
   strength sliders are **not** currently included in the revert snapshot — see BACKLOG.)*
-- ✅ **Bat tab icon** — a bat-face icon on the mirror tab, loaded from
-  `BepInEx/config/FangtasticPalette/tab-icon.png`; the art is kept in the repo at `assets/tab-icon.png`.
-  Users can drop their own PNG at that path to override it; a generated glyph is the last-resort
-  fallback if no PNG is present.
+- ✅ **Bat tab icon** — a bat-face icon on the mirror tab, **embedded in the DLL** (source art at
+  `assets/tab-icon.png`) so it ships with the plugin and shows on a fresh install. Users can drop a
+  PNG at `BepInEx/config/FangtasticPalette/tab-icon.png` to override it; a generated glyph is only a
+  last resort if the embedded resource can't be read.
 
 ## Packaging / release
 - ✅ Published as **v1.0.0** on Nexus (mod 143). Build/pack via `pack.ps1` → `dist/…zip`.

@@ -3,6 +3,18 @@
 Design/architecture decisions worth not re-litigating. Newest first. Seeded from code + git history
 + the README; where rationale wasn't recoverable it's marked.
 
+## 2026-08-22 — Embed the tab icon in the DLL (v1.0.1)
+**Why:** `pack.ps1` (a workspace-synced canonical) bundles only the DLL, so the release zip never
+contained `tab-icon.png` — a fresh install fell back to a generated placeholder glyph, and the bat
+icon only showed if the user manually placed a PNG. Embedding the PNG as an `EmbeddedResource`
+(pinned `LogicalName` `FangtasticPalette.tab-icon.png`) ships the icon inside the one file the zip
+does contain, so every install gets the bat with no setup. `TabIcon` resolution order is now: user
+PNG override → embedded default → generated glyph (last resort). The source art is version-controlled
+at `assets/tab-icon.png`.
+**Rejected:** Editing the shared `pack.ps1`/pack template to bundle a config folder — a workspace-wide
+change affecting every mod, out of scope for a single mod's fix. Loading only from the config path
+(the pre-1.0.1 behaviour) — leaves fresh installs without the icon.
+
 ## 2026-08-22 — Full structural review recorded, minimal in-place fixes only
 **Why:** First baseline structural review (componentization + abstraction + Codex). The mod is
 shipped and works; the goal was to *document* debt, not refactor a working release. Only genuinely

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.1 — 2026-08-22
+
+Bug-fix release: the Bat Form tab icon now ships **inside the mod**.
+
+- **The bat tab icon is bundled in the plugin.** Previously the release only contained the DLL, so a
+  fresh install with no `tab-icon.png` fell back to a generated placeholder glyph — the bat icon only
+  showed if you happened to place a PNG yourself. The icon is now embedded in the DLL, so **everyone
+  gets the bat on the Bat Form tab out of the box**, no manual file drop needed.
+- Dropping your own PNG at `BepInEx/config/FangtasticPalette/tab-icon.png` still overrides the
+  built-in icon, exactly as before.
+- Internal cleanup only, no gameplay change: removed dead code left over from the shared UI helpers
+  and corrected stale log/comment text.
+
 ## 1.0.0 — 2026-08-20
 
 First release. Recolour Bat Form — the whole bat, not just a tint.
