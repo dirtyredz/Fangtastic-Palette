@@ -9,7 +9,6 @@ short.
   harness stripped for release (lives in git history for the mermaid port).
 
 ## Next (opportunistic — see [BACKLOG.md](BACKLOG.md))
-- 📋 Fix the fallback tab glyph (cat paw → bat) — the one user-visible defect from the review.
 - 📋 Structural cleanups when a functional change next touches these files (spec value-types, panel
   split, palette-config owner, cache lifecycle) — none blocking; all want in-game verification.
 

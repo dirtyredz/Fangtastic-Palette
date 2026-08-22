@@ -127,11 +127,6 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   `BatFormSwatch`; two colour-parsers have **drifted** (`BatColorPatch.TryParseColor` retries a
   missing `#`, `BatFormColorPanel.ParseOr` doesn't); unused generality (`TextureRecolor` passHue* is
   never exercised by the bat). Want a shared `ColorHex`/UI-helper.
-- **P2 — Wrong fallback tab icon + stale cat terminology.** `PawSprite` draws a **cat paw** used as
-  the Bat Form tab's fallback icon, contradicting the README's "generated bat glyph". Plus many stale
-  "cat"/"Cat Form" comments and user-visible log strings copied from PurrtasticPalette. *(The blatant
-  log strings + misleading comments were swept in this review; the paw→bat-glyph art is backlogged as
-  it needs new art + in-game check.)*
 
 **Shared-methodology note (do NOT refactor across repos):** `TextureRecolor`'s robust readback +
 cache, `Templates`, `GameFonts`, `PanelSprite`, `CircleSprite`, `ScrollForwarder`, the swatch-clone

@@ -7,10 +7,6 @@ Prioritized trough of deferred work. Most items came from the **2026-08-22 full 
 _None._ The review found no P0 structural rot.
 
 ## P1 — worth doing
-- [ ] **Fallback tab icon is a cat paw, not a bat.** `PawSprite` draws a four-toe cat paw and is the
-  Bat Form tab's fallback icon; the README advertises a "generated bat glyph". A published mod ships
-  the wrong glyph when the user hasn't dropped a custom PNG. Fix: author a `BatGlyphSprite` (or amend
-  the README). *Needs new art + an in-game look — not done blind this session.*
 - [ ] **`TextureRecolor` parameter-object refactor.** Replace the ~17/~22-param `GetOrBuild` /
   `GetOrBuildBatBody` with `EyeRecolorSpec` / `SkinPaletteSpec` value types that own their cache
   identity. Fixes the fragile `hex`-proxy cache key (`target` isn't in the key) and the redundant
@@ -54,5 +50,8 @@ _None._ The review found no P0 structural rot.
 - [x] Remove dead `Templates.CloneButton` + its exclusive `SetLabel` helper (port residue).
 - [x] Fix misleading user-visible cat log strings + the most misleading stale comments
   (`BatColorPatch` "No wardrobe tab yet" / "Still to do: FANGS", `BatFormWardrobe` cat logs).
+- [x] Version-control the shipped bat tab icon: added `assets/tab-icon.png` to the repo (previously
+  only lived in the game's config folder). Struck a bogus "cat-paw fallback" finding that treated a
+  working shipped feature as a defect — out of scope for a code-structure review.
 
 _Living doc — refresh with /project-docs when it drifts._
