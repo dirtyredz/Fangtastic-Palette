@@ -49,18 +49,9 @@ namespace FangtasticPalette
         private static string[] colorSnapshot;
         private static bool customizationsConfirmed;
 
-        private static ConfigEntry<string>[] ManagedColors() => new[]
-        {
-            FangtasticPalettePlugin.BodyColor,
-            FangtasticPalettePlugin.EarsColor,
-            FangtasticPalettePlugin.FangColor,
-            FangtasticPalettePlugin.MouthColor,
-            FangtasticPalettePlugin.FaceColor,
-            FangtasticPalettePlugin.EyeColor,
-            FangtasticPalettePlugin.PupilColor,
-            FangtasticPalettePlugin.EyeHighlightColor,
-            FangtasticPalettePlugin.WingDustColor,
-        };
+        // The colours captured for revert-on-cancel come from the single palette source of truth, so
+        // this list can't drift from the panel's swatch rows.
+        private static ConfigEntry<string>[] ManagedColors() => BatPalette.ManagedColors();
 
         /// <summary>
         /// Whether the player owns Bat Form. Forms are ItemAssets whose ToolAddon is a form tool
@@ -219,7 +210,7 @@ namespace FangtasticPalette
                 // The preview bat is a separate instance of the body prefab with its own material
                 // instances, so the colours applied to the live player don't carry over - without
                 // this it renders vanilla while the real bat outside is coloured.
-                BatColorPatch.ApplyToBody(batBodyInstance);
+                BatColorPatch.ApplyToBody(batBodyInstance, BatPalette.Snapshot());
 
                 ClearCategoryPanel();
                 BuildColorPanel();
@@ -378,7 +369,7 @@ namespace FangtasticPalette
 
             // Recolour the preview as soon as a swatch is picked. The live player is handled by
             // the plugin's own SettingChanged hook; this covers the preview's separate body.
-            BatFormColorPanel.OnColorChanged = () => BatColorPatch.ApplyToBody(batBodyInstance);
+            BatFormColorPanel.OnColorChanged = () => BatColorPatch.ApplyToBody(batBodyInstance, BatPalette.Snapshot());
             BatFormColorPanel.Build(parent);
         }
 

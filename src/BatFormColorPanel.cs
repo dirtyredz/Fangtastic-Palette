@@ -16,28 +16,9 @@ namespace FangtasticPalette
     /// </summary>
     internal static class BatFormColorPanel
     {
-        /// <summary>
-        /// One row per colourable part. DefaultColor is what the game ships that part as, shown on
-        /// the leftmost swatch: a blank config value means "vanilla", and painting that swatch the
-        /// actual vanilla colour says so far more clearly than a caption ever did.
-        /// </summary>
-        // One row per part, in the order they read on the face. DefaultColor is the part's vanilla
-        // colour (sampled from Bat_DIF), shown on the leftmost "Default" swatch so a blank config
-        // value reads as "keep vanilla". Wing Dust is a flight-only VFX the still preview can't show,
-        // so its swatch won't change the preview - but the control lives here anyway (with its
-        // strength slider below the rows) so every colour is in one place.
-        private static readonly (string Label, Func<ConfigEntry<string>> Setting, Color DefaultColor)[] Rows =
-        {
-            ("Body", () => FangtasticPalettePlugin.BodyColor, new Color32(0x22, 0x30, 0x49, 0xFF)),
-            ("Ears", () => FangtasticPalettePlugin.EarsColor, new Color32(0xB3, 0x98, 0x8C, 0xFF)),
-            ("Fangs", () => FangtasticPalettePlugin.FangColor, new Color32(0xFF, 0xFF, 0xFF, 0xFF)),
-            ("Mouth", () => FangtasticPalettePlugin.MouthColor, new Color32(0x9A, 0x5A, 0x60, 0xFF)),
-            ("Face", () => FangtasticPalettePlugin.FaceColor, new Color32(0xC8, 0x9A, 0x8C, 0xFF)),
-            ("Eyes", () => FangtasticPalettePlugin.EyeColor, new Color32(0xC9, 0xB6, 0xE8, 0xFF)),
-            ("Pupil", () => FangtasticPalettePlugin.PupilColor, new Color32(0x14, 0x10, 0x1A, 0xFF)),
-            ("Eye Highlight", () => FangtasticPalettePlugin.EyeHighlightColor, new Color32(0xFF, 0xFF, 0xFF, 0xFF)),
-            ("Wing Dust", () => FangtasticPalettePlugin.WingDustColor, new Color32(0xED, 0xED, 0xED, 0xFF)),
-        };
+        // The colourable parts (label + ConfigEntry + vanilla "Default" swatch colour) come from the
+        // single source of truth, BatPalette.Colors - so the panel's rows and the wardrobe's
+        // revert-on-cancel list can't drift.
 
         private static readonly (string Label, string Hex)[] Presets =
         {
@@ -108,7 +89,7 @@ namespace FangtasticPalette
                 // Each colour row, with its own intensity/strength slider tucked directly underneath
                 // (Body/Ears/Face/Wing Dust have one; the rest don't). Grouping the slider with its
                 // colour reads better than a block of loose sliders at the bottom.
-                foreach (var (label, setting, defaultColor) in Rows)
+                foreach (var (label, setting, defaultColor) in BatPalette.Colors)
                 {
                     totalHeight += AddRow(root.transform, label, setting(), defaultColor);
                     rowCount++;

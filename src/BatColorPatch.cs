@@ -185,15 +185,17 @@ namespace FangtasticPalette
                 return;
             }
 
-            ApplyToBody(bodyView, logVerbose, includeEyes);
+            ApplyToBody(bodyView, BatPalette.Snapshot(), logVerbose, includeEyes);
         }
 
         /// <summary>
         /// Recolours any Bat Form body, not just the live player's - the wardrobe preview
         /// instantiates its own copy with its own material instances, so it must be applied to
-        /// explicitly (BatFormWardrobe calls this on the preview body).
+        /// explicitly (BatFormWardrobe calls this on the preview body). Takes an immutable palette
+        /// snapshot so the engine doesn't read BepInEx statics directly.
         /// </summary>
-        internal static void ApplyToBody(BodyViewAsset bodyView, bool logVerbose = true, bool includeEyes = true)
+        internal static void ApplyToBody(BodyViewAsset bodyView, in BatPaletteValues values,
+            bool logVerbose = true, bool includeEyes = true)
         {
             if (bodyView == null)
             {
@@ -202,13 +204,10 @@ namespace FangtasticPalette
 
             suppressLogging = !logVerbose;
 
-            var bodyColor = FangtasticPalettePlugin.BodyColor.Value;
-            var earsColor = FangtasticPalettePlugin.EarsColor.Value;
-            var fangColor = FangtasticPalettePlugin.FangColor.Value;
-            var mouthColor = FangtasticPalettePlugin.MouthColor.Value;
-            var faceColor = FangtasticPalettePlugin.FaceColor.Value;
-            var eyeColor = FangtasticPalettePlugin.EyeColor.Value;
-            var wingDustColor = FangtasticPalettePlugin.WingDustColor.Value;
+            var bodyColor = values.BodyColor;
+            var earsColor = values.EarsColor;
+            var eyeColor = values.EyeColor;
+            var wingDustColor = values.WingDustColor;
             var bodyMatches = 0;
             var eyeMatches = 0;
             var dustMatches = 0;
@@ -225,7 +224,7 @@ namespace FangtasticPalette
                     if (includeEyes)
                     {
                         eyeMatches++;
-                        ApplyEyeColor(renderer, eyeColor);
+                        ApplyEyeColor(renderer, values);
                     }
 
                     continue;
@@ -234,7 +233,7 @@ namespace FangtasticPalette
                 if (name == WingDustRendererName)
                 {
                     dustMatches++;
-                    ApplyWingDustColor(renderer, wingDustColor);
+                    ApplyWingDustColor(renderer, values);
                     continue;
                 }
 
@@ -249,8 +248,7 @@ namespace FangtasticPalette
                         }
 
                         bodyMatches++;
-                        ApplyBodyColor(renderer, i, materials[i], bodyColor, earsColor,
-                            fangColor, mouthColor, faceColor);
+                        ApplyBodyColor(renderer, i, materials[i], values);
                     }
                 }
             }
@@ -269,15 +267,13 @@ namespace FangtasticPalette
         }
 
         private static void ApplyBodyColor(
-            Renderer renderer, int materialIndex, Material material,
-            string bodyHex, string earsHex, string fangHex, string mouthHex, string faceHex)
+            Renderer renderer, int materialIndex, Material material, in BatPaletteValues values)
         {
             foreach (var (texProperty, tintProperty) in BodyTexturePairs)
             {
                 if (material.HasProperty(texProperty))
                 {
-                    ApplyBodyPaletteSlot(renderer, materialIndex, material, texProperty, tintProperty,
-                        bodyHex, earsHex, fangHex, mouthHex, faceHex);
+                    ApplyBodyPaletteSlot(renderer, materialIndex, material, texProperty, tintProperty, values);
                 }
             }
         }
@@ -303,24 +299,24 @@ namespace FangtasticPalette
         /// </summary>
         private static void ApplyBodyPaletteSlot(
             Renderer renderer, int materialIndex, Material material, string texProperty, string tintProperty,
-            string bodyHex, string earsHex, string fangHex, string mouthHex, string faceHex)
+            in BatPaletteValues values)
         {
             var key = (material, texProperty);
 
-            var bodyColor = ParseOptionalColor(bodyHex, "BodyColor");
-            var earsColor = ParseOptionalColor(earsHex, "EarsColor");
-            var fangColor = ParseOptionalColor(fangHex, "FangColor");
-            var mouthColor = ParseOptionalColor(mouthHex, "MouthColor");
-            var faceColor = ParseOptionalColor(faceHex, "FaceColor");
+            var bodyColor = ParseOptionalColor(values.BodyColor, "BodyColor");
+            var earsColor = ParseOptionalColor(values.EarsColor, "EarsColor");
+            var fangColor = ParseOptionalColor(values.FangColor, "FangColor");
+            var mouthColor = ParseOptionalColor(values.MouthColor, "MouthColor");
+            var faceColor = ParseOptionalColor(values.FaceColor, "FaceColor");
 
             // Material 0 is the wings + lower body, material 1 is the head. The head carries the ears
             // (hue/value skin) + the spatial regions; the wing submesh is just one uniform body colour.
             var skinAsBody = materialIndex == 0;
-            var bodyOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.BodyIntensity.Value);
+            var bodyOriginalBlend = 1f - Mathf.Clamp01(values.BodyIntensity);
 
             // Spatial regions; first match wins, so smaller/specific ones first. Mouth (combined
             // nose+mouth) is a flat fill faded by Mouth Intensity toward the original texture.
-            var mouthOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.MouthIntensity.Value);
+            var mouthOriginalBlend = 1f - Mathf.Clamp01(values.MouthIntensity);
             var regions = new System.Collections.Generic.List<SpatialRegion>(4);
             AddRegion(regions, mouthColor, MouthBox, flat: true, originalBlend: mouthOriginalBlend);
 
@@ -340,7 +336,7 @@ namespace FangtasticPalette
             // face would otherwise be recoloured: a Face colour, or the Ears colour bleeding onto it.
             if (faceColor.HasValue || earsColor.HasValue)
             {
-                var faceOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.FaceIntensity.Value);
+                var faceOriginalBlend = 1f - Mathf.Clamp01(values.FaceIntensity);
                 regions.Add(new SpatialRegion(
                     faceColor,
                     FaceBox.UMin, FaceBox.UMax, FaceBox.VMin, FaceBox.VMax,
@@ -381,7 +377,7 @@ namespace FangtasticPalette
             // slots - the hue/value split still runs but resolves to a single tone (with the source's
             // own shading preserved and softened by Ear Intensity: 1 = full flat colour, lower fades
             // toward the original shading, so skinOriginalBlend = 1 - EarIntensity).
-            var skinOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.EarIntensity.Value);
+            var skinOriginalBlend = 1f - Mathf.Clamp01(values.EarIntensity);
             var recolored = TextureRecolor.GetOrBuildBatBody(RendererOverrideStore.OriginalTextures[key], new SkinPaletteSpec(
                 bodyColor, earsColor, earsColor, earsColor,
                 BodyBrightnessFloor, SkinHueCenter, SkinHueRange, SkinMinSaturation, RimValue, BeigeMinValue,
@@ -411,14 +407,14 @@ namespace FangtasticPalette
         ///   - in between                 -> the eye's main mass (EyeColor, else original)
         /// All three blank restores the original texture.
         /// </summary>
-        private static void ApplyEyeColor(Renderer renderer, string unusedHex)
+        private static void ApplyEyeColor(Renderer renderer, in BatPaletteValues values)
         {
-            var eyeColor = ParseOptionalColor(FangtasticPalettePlugin.EyeColor.Value, "EyeColor");
-            var pupilColor = ParseOptionalColor(FangtasticPalettePlugin.PupilColor.Value, "PupilColor");
-            var highlightColor = ParseOptionalColor(FangtasticPalettePlugin.EyeHighlightColor.Value, "EyeHighlightColor");
-            var eyeHex = FangtasticPalettePlugin.EyeColor.Value;
-            var pupilHex = FangtasticPalettePlugin.PupilColor.Value;
-            var highlightHex = FangtasticPalettePlugin.EyeHighlightColor.Value;
+            var eyeColor = ParseOptionalColor(values.EyeColor, "EyeColor");
+            var pupilColor = ParseOptionalColor(values.PupilColor, "PupilColor");
+            var highlightColor = ParseOptionalColor(values.EyeHighlightColor, "EyeHighlightColor");
+            var eyeHex = values.EyeColor;
+            var pupilHex = values.PupilColor;
+            var highlightHex = values.EyeHighlightColor;
 
             var materials = renderer.materials;
             for (var materialIndex = 0; materialIndex < materials.Length; materialIndex++)
@@ -500,9 +496,10 @@ namespace FangtasticPalette
         /// original brightness - correct for HDR values too (RGBToHSV/HSVToRGB don't clamp, and the
         /// probe read _Color at 2.297). A plain Color property, no texture regeneration.
         /// </summary>
-        private static void ApplyWingDustColor(Renderer renderer, string hex)
+        private static void ApplyWingDustColor(Renderer renderer, in BatPaletteValues values)
         {
-            var intensity = FangtasticPalettePlugin.WingDustStrength.Value;
+            var hex = values.WingDustColor;
+            var intensity = values.WingDustStrength;
 
             // Drive the ParticleSystem's startColor too (multiplied on top of the material colour),
             // since that's what actually tints emitted dust in many setups.

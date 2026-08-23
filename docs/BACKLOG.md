@@ -16,10 +16,11 @@ _None._ The review found no P0 structural rot.
 - [ ] **Split `BatFormColorPanel.cs` (753 lines).** Extract a declarative `ColorControlSpec` (kills the
   label-string `switch`), a `SwatchGrid`/`SwatchView` (cloned-vs-drawn fallback + refresh), and reusable
   slider/toggle row builders. *Wants in-game layout verification.*
-- [ ] **Single palette-config owner + immutable snapshot.** One source of truth for the colour set
-  (dedupe `Plugin` binds / `Rows` / `ManagedColors` / direct static reads); pass a `BatPaletteValues`
-  snapshot into `ApplyToBody` so the engine doesn't depend on BepInEx statics. Also closes the
-  `Rows`↔`ManagedColors` drift trap.
+- [x] **Single palette-config owner + immutable snapshot.** ✅ 2026-08-22 — new `src/BatPalette.cs`:
+  canonical `Colors` list (panel rows + wardrobe `ManagedColors` both derive from it → drift trap
+  closed) + `Snapshot()` → `BatPaletteValues` threaded through `ApplyToBody(body, in BatPaletteValues)`
+  and the apply chain, so the engine no longer reads `FangtasticPalettePlugin.*` statics. Config
+  binding stays in `Plugin` (no `.cfg` compat risk). *(Wants in-game verify.)*
 - [x] **Give recolour caches a lifecycle.** ✅ 2026-08-22 — extracted `RecolorTextureCache` (bounded
   LRU, cap 32, `Destroy`s evicted textures + purge-on-teardown) and `RendererOverrideStore` (the four
   `Original*` maps; `Purge()` on teardown + `PruneDead()` for destroyed Materials/ParticleSystems).
@@ -50,6 +51,9 @@ _None._ The review found no P0 structural rot.
   since each mod is a standalone repo.
 
 ## Done (2026-08-22)
+- [x] **Single palette-config owner** (P1). New `src/BatPalette.cs` — canonical `Colors` list (panel
+  rows + wardrobe revert derive from it) + `Snapshot()`/`BatPaletteValues` threaded through the engine
+  so it no longer reads config statics. Config binding stays in `Plugin`. *In-game verify pending.*
 - [x] **Recolour cache lifecycle** (P1). New `src/RecolorTextureCache.cs` (bounded LRU, Destroys
   evicted textures + purge-on-teardown) and `src/RendererOverrideStore.cs` (the four `Original*` maps
   + `Purge()`/`PruneDead()`). `Plugin.OnDestroy` purges both; reapplier prunes dead refs periodically.

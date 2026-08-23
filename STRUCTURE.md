@@ -13,7 +13,7 @@ Two cooperating layers, cleanly separated (verified: the engine never references
 - **Wardrobe UI** — injects a "Bat Form" tab into the mirror's wardrobe with a live preview, swatch
   pickers, sliders, and an RGB colour picker, all cloned from the game's own widgets.
 
-Source is flat in `src/` (no `src/FangtasticPalette/`), 21 files, ~4,400 lines. It is the second entry
+Source is flat in `src/` (no `src/FangtasticPalette/`), 22 files, ~4,500 lines. It is the second entry
 in the "…tastic Palette" set after the sibling **PurrtasticPalette** (cat); much of the machinery is a
 port, and a third (Fintastic / mermaid) is planned to reuse it again.
 
@@ -43,15 +43,16 @@ ENGINE                                        UI (wardrobe)
 
 | Component | Responsibility | Key files | Depends on |
 |---|---|---|---|
-| **Plugin** | BepInEx entry; binds every config value; wires live-apply; installs Harmony + reapplier; purges the recolour caches on teardown (`OnDestroy`) | `src/Plugin.cs` | BepInEx, Harmony, RecolorTextureCache, RendererOverrideStore |
-| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original state via RendererOverrideStore | `src/BatColorPatch.cs` (642) | TextureRecolor, RendererOverrideStore, Plugin statics |
+| **Plugin** | BepInEx entry; binds every config value (canonical set enumerated by BatPalette); wires live-apply; installs Harmony + reapplier; purges the recolour caches on teardown (`OnDestroy`) | `src/Plugin.cs` | BepInEx, Harmony, RecolorTextureCache, RendererOverrideStore |
+| **Palette config owner** | Single source of truth for the colour set: canonical ordered `Colors` list (label + `ConfigEntry` + default swatch) that the panel rows & wardrobe revert both derive from; `Snapshot()` → immutable `BatPaletteValues` for the engine | `src/BatPalette.cs` | BepInEx, Plugin config entries |
+| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original state via RendererOverrideStore; recolours from a `BatPaletteValues` snapshot (no direct config statics) | `src/BatColorPatch.cs` (639) | TextureRecolor, RendererOverrideStore, BatPalette |
 | **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; delegates result caching to RecolorTextureCache | `src/TextureRecolor.cs` (464) | UnityEngine, RecolorSpecs, RecolorTextureCache |
 | **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours. Also holds the bat-body `SpatialRegion` (its only consumer is `SkinPaletteSpec`) | `src/RecolorSpecs.cs` | UnityEngine |
 | **Recolour texture cache** | Bounded LRU (cap 32) of regenerated textures; `Destroy`s evicted textures + purge-on-teardown, so wardrobe fiddling can't leak. LRU never evicts the active palette (reapplier keeps it MRU) | `src/RecolorTextureCache.cs` | UnityEngine |
 | **Renderer override store** | The four `Original*` maps (texture/tint/wing-dust/particle-start) captured for restore-on-blank; `Purge()` on teardown + `PruneDead()` drops entries for destroyed Materials/ParticleSystems | `src/RendererOverrideStore.cs` | UnityEngine |
 | **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit); prunes dead override entries every ~600 frames | `src/BatColorReapplier.cs` | BatColorPatch, RendererOverrideStore |
-| **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel; hides VFX/bloom | `src/BatFormWardrobe.cs` (497) | BatColorPatch, BatFormColorPanel, TabIcon, PreviewBloomSuppressor |
-| **Colour panel** | Builds the scrollable swatch/slider/toggle panel; selection state; opens the picker | `src/BatFormColorPanel.cs` (753) | BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
+| **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel (colours from BatPalette); hides VFX/bloom | `src/BatFormWardrobe.cs` (486) | BatColorPatch, BatFormColorPanel, BatPalette, TabIcon, PreviewBloomSuppressor |
+| **Colour panel** | Builds the scrollable swatch/slider/toggle panel (rows from BatPalette.Colors); selection state; opens the picker | `src/BatFormColorPanel.cs` (734) | BatPalette, BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
 | **Cloned swatch** | One colour swatch cloned from the game's own widget (ring/checkmark/hover sound) | `src/BatFormSwatch.cs` | Templates (reflection), ScrollForwarder |
 | **Colour picker** | Modal RGB picker adapted from ModNook; clones the game `SliderButton` | `src/ColorPickerPopup.cs` | Templates, PanelSprite, GameFonts |
 | **Widget cloning** | Sources & clones native game widgets (SliderButton) without waking them | `src/Templates.cs` | Chicken.UI |
@@ -105,12 +106,14 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   `SwatchGrid`/`SwatchView` owning cloned-vs-drawn fallback + refresh, and reusable slider/toggle row
   builders. Consistent with the mod's own pattern (ColorPickerPopup/HeaderDecoration are one-widget
   files). *(Deferred: UI refactor wants in-game layout verification.)*
-- **P1 — Palette-setting knowledge is duplicated** across `Plugin` binds, `BatFormColorPanel.Rows`,
-  `BatFormWardrobe.ManagedColors()`, and direct `FangtasticPalettePlugin.*Color.Value` reads in
-  `BatColorPatch`. Adding a colour means coordinated edits in several files, and `Rows`↔`ManagedColors`
-  drift would silently drop a setting from revert-on-cancel. Wants one palette-config owner exposing
-  an immutable snapshot consumed by the engine (`ApplyToBody(body, BatPaletteValues)`), removing the
-  plugin-as-service-locator smell. *(Deferred: architecture change.)*
+- **P1 — Palette-setting knowledge is duplicated. ✅ RESOLVED 2026-08-22.** Introduced `BatPalette`
+  as the single source of truth: a canonical ordered `Colors` list that `BatFormColorPanel` (rows) and
+  `BatFormWardrobe.ManagedColors()` (revert) both derive from — closing the `Rows`↔`ManagedColors`
+  drift trap — plus `Snapshot()` → immutable `BatPaletteValues` threaded through
+  `ApplyToBody(body, in BatPaletteValues)` and the whole apply chain, so the engine no longer reads
+  `FangtasticPalettePlugin.*` statics. Config binding stays in `Plugin` (keys/defaults/Mod Nook tags
+  unchanged — no `.cfg` compat risk); `BatPalette` references the bound entries. *(Wants in-game
+  verification: panel rows, live preview, revert-on-cancel.)*
 - **P1 — Recolour caches have no lifecycle. ✅ RESOLVED 2026-08-22.** Extracted `RecolorTextureCache`
   (bounded LRU that `Destroy`s evicted textures — caps the per-palette leak — plus purge-on-teardown)
   and `RendererOverrideStore` (the four original-state maps, with `Purge()` on teardown and
