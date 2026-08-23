@@ -156,23 +156,9 @@ namespace FangtasticPalette
         // the recolour is visible in flight - applied to both the ParticleSystem startColor and the
         // material's HDR colour/emission. Blank colour leaves the dust at its vanilla intensity.
 
-        // Original values, captured the first time a material+property is overridden, so clearing a
-        // setting back to blank restores the real original instead of leaving the last override in
-        // place. Keyed by the live Material instance - a fresh one exists after every body swap
-        // (EntityCustomization.SetBodyView re-instantiates the prefab), so this never needs
-        // explicit eviction.
-        private static readonly Dictionary<(Material Material, string Property), Texture> OriginalTextures =
-            new Dictionary<(Material, string), Texture>();
-        private static readonly Dictionary<(Material Material, string Property), Color> OriginalTints =
-            new Dictionary<(Material, string), Color>();
-        private static readonly Dictionary<(Material Material, string Property), Color> OriginalWingDust =
-            new Dictionary<(Material, string), Color>();
-
-        // A particle system commonly drives its colour through the ParticleSystem module's
-        // startColor, which is multiplied on top of the material colour - so tinting the material
-        // alone can look like nothing changed. Captured for restore, keyed by the live system.
-        private static readonly Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient> OriginalWingDustStart =
-            new Dictionary<ParticleSystem, ParticleSystem.MinMaxGradient>();
+        // Captured original renderer state (textures/tints/wing-dust) lives in RendererOverrideStore,
+        // which owns its lifecycle (PruneDead / Purge). The capture-once + restore idiom below still
+        // reads/writes those maps directly; wrapping it is the deferred P2 (OriginalValueCache).
 
         private static bool suppressLogging;
 
@@ -366,28 +352,28 @@ namespace FangtasticPalette
 
             if (!bodyColor.HasValue && !earsColor.HasValue && regionArray.Length == 0)
             {
-                if (OriginalTextures.TryGetValue(key, out var originalMap))
+                if (RendererOverrideStore.OriginalTextures.TryGetValue(key, out var originalMap))
                 {
                     material.SetTexture(texProperty, originalMap);
-                    if (tintProperty != null && OriginalTints.TryGetValue(key, out var originalTint))
+                    if (tintProperty != null && RendererOverrideStore.OriginalTints.TryGetValue(key, out var originalTint))
                     {
                         material.SetColor(tintProperty, originalTint);
                     }
 
                     WriteToPropertyBlock(renderer, materialIndex, texProperty, originalMap, tintProperty,
-                        OriginalTints.TryGetValue(key, out var tint) ? tint : (Color?)null);
+                        RendererOverrideStore.OriginalTints.TryGetValue(key, out var tint) ? tint : (Color?)null);
                     Debug($"Body: restored '{material.name}' {texProperty} to original.");
                 }
 
                 return;
             }
 
-            if (!OriginalTextures.ContainsKey(key))
+            if (!RendererOverrideStore.OriginalTextures.ContainsKey(key))
             {
-                OriginalTextures[key] = material.GetTexture(texProperty);
+                RendererOverrideStore.OriginalTextures[key] = material.GetTexture(texProperty);
                 if (tintProperty != null)
                 {
-                    OriginalTints[key] = material.GetColor(tintProperty);
+                    RendererOverrideStore.OriginalTints[key] = material.GetColor(tintProperty);
                 }
             }
 
@@ -396,7 +382,7 @@ namespace FangtasticPalette
             // own shading preserved and softened by Ear Intensity: 1 = full flat colour, lower fades
             // toward the original shading, so skinOriginalBlend = 1 - EarIntensity).
             var skinOriginalBlend = 1f - Mathf.Clamp01(FangtasticPalettePlugin.EarIntensity.Value);
-            var recolored = TextureRecolor.GetOrBuildBatBody(OriginalTextures[key], new SkinPaletteSpec(
+            var recolored = TextureRecolor.GetOrBuildBatBody(RendererOverrideStore.OriginalTextures[key], new SkinPaletteSpec(
                 bodyColor, earsColor, earsColor, earsColor,
                 BodyBrightnessFloor, SkinHueCenter, SkinHueRange, SkinMinSaturation, RimValue, BeigeMinValue,
                 BeigeBlendBand, BodyEdgeSoftness, skinOriginalBlend, regionArray,
@@ -455,28 +441,28 @@ namespace FangtasticPalette
 
                     if (!eyeColor.HasValue && !pupilColor.HasValue && !highlightColor.HasValue)
                     {
-                        if (OriginalTextures.TryGetValue(key, out var originalMap))
+                        if (RendererOverrideStore.OriginalTextures.TryGetValue(key, out var originalMap))
                         {
                             material.SetTexture(texProperty, originalMap);
-                            if (tintProperty != null && OriginalTints.TryGetValue(key, out var originalTint))
+                            if (tintProperty != null && RendererOverrideStore.OriginalTints.TryGetValue(key, out var originalTint))
                             {
                                 material.SetColor(tintProperty, originalTint);
                             }
 
                             WriteToPropertyBlock(renderer, materialIndex, texProperty, originalMap, tintProperty,
-                                OriginalTints.TryGetValue(key, out var tint) ? tint : (Color?)null);
+                                RendererOverrideStore.OriginalTints.TryGetValue(key, out var tint) ? tint : (Color?)null);
                             Debug($"Eyes: restored '{material.name}' {texProperty} to original.");
                         }
 
                         continue;
                     }
 
-                    if (!OriginalTextures.ContainsKey(key))
+                    if (!RendererOverrideStore.OriginalTextures.ContainsKey(key))
                     {
-                        OriginalTextures[key] = material.GetTexture(texProperty);
+                        RendererOverrideStore.OriginalTextures[key] = material.GetTexture(texProperty);
                         if (tintProperty != null)
                         {
-                            OriginalTints[key] = material.GetColor(tintProperty);
+                            RendererOverrideStore.OriginalTints[key] = material.GetColor(tintProperty);
                         }
                     }
 
@@ -485,7 +471,7 @@ namespace FangtasticPalette
                     // EyeColor (nullable: null leaves the mid band original), glintColor is the
                     // Eye Highlight, pupilColor is the pupil. Floor 1 so the picked colours land at
                     // full brightness. The 'target' arg is unused (saturated branch never runs).
-                    var recolored = TextureRecolor.GetOrBuild(OriginalTextures[key], new EyeRecolorSpec(
+                    var recolored = TextureRecolor.GetOrBuild(RendererOverrideStore.OriginalTextures[key], new EyeRecolorSpec(
                         eyeColor ?? Color.black,
                         splitBelowSaturation: 2f,
                         highlightColor: eyeColor,
@@ -524,19 +510,19 @@ namespace FangtasticPalette
             if (system != null)
             {
                 var main = system.main;
-                if (!OriginalWingDustStart.ContainsKey(system))
+                if (!RendererOverrideStore.OriginalWingDustStart.ContainsKey(system))
                 {
-                    OriginalWingDustStart[system] = main.startColor;
+                    RendererOverrideStore.OriginalWingDustStart[system] = main.startColor;
                 }
 
                 if (string.IsNullOrWhiteSpace(hex))
                 {
-                    main.startColor = OriginalWingDustStart[system];
+                    main.startColor = RendererOverrideStore.OriginalWingDustStart[system];
                 }
                 else if (TryParseColor(hex, out var startTarget))
                 {
                     // Keep the original start alpha so the dust's fade/opacity is unchanged.
-                    var baseColor = OriginalWingDustStart[system].color;
+                    var baseColor = RendererOverrideStore.OriginalWingDustStart[system].color;
                     Color.RGBToHSV(startTarget, out var h, out var s, out _);
                     Color.RGBToHSV(baseColor, out _, out _, out var v);
                     var tinted = Color.HSVToRGB(h, s, v * intensity, hdr: true);
@@ -563,7 +549,7 @@ namespace FangtasticPalette
 
                     if (string.IsNullOrWhiteSpace(hex))
                     {
-                        if (OriginalWingDust.TryGetValue(key, out var original))
+                        if (RendererOverrideStore.OriginalWingDust.TryGetValue(key, out var original))
                         {
                             material.SetColor(property, original);
                             Debug($"WingDust: restored '{material.name}' {property} to original.");
@@ -578,15 +564,15 @@ namespace FangtasticPalette
                         continue;
                     }
 
-                    if (!OriginalWingDust.ContainsKey(key))
+                    if (!RendererOverrideStore.OriginalWingDust.ContainsKey(key))
                     {
-                        OriginalWingDust[key] = material.GetColor(property);
+                        RendererOverrideStore.OriginalWingDust[key] = material.GetColor(property);
                     }
 
                     Color.RGBToHSV(color, out var targetH, out var targetS, out _);
-                    Color.RGBToHSV(OriginalWingDust[key], out _, out _, out var originalV);
+                    Color.RGBToHSV(RendererOverrideStore.OriginalWingDust[key], out _, out _, out var originalV);
                     var recolored = Color.HSVToRGB(targetH, targetS, originalV * intensity, hdr: true);
-                    recolored.a = OriginalWingDust[key].a;
+                    recolored.a = RendererOverrideStore.OriginalWingDust[key].a;
                     material.SetColor(property, recolored);
                     Debug($"WingDust: set '{material.name}' {property} to {recolored} (hue/sat from '{hex}').");
                 }

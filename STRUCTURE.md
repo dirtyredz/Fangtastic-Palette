@@ -13,7 +13,7 @@ Two cooperating layers, cleanly separated (verified: the engine never references
 - **Wardrobe UI** — injects a "Bat Form" tab into the mirror's wardrobe with a live preview, swatch
   pickers, sliders, and an RGB colour picker, all cloned from the game's own widgets.
 
-Source is flat in `src/` (no `src/FangtasticPalette/`), 19 files, ~4,300 lines. It is the second entry
+Source is flat in `src/` (no `src/FangtasticPalette/`), 21 files, ~4,400 lines. It is the second entry
 in the "…tastic Palette" set after the sibling **PurrtasticPalette** (cat); much of the machinery is a
 port, and a third (Fintastic / mermaid) is planned to reuse it again.
 
@@ -43,11 +43,13 @@ ENGINE                                        UI (wardrobe)
 
 | Component | Responsibility | Key files | Depends on |
 |---|---|---|---|
-| **Plugin** | BepInEx entry; binds every config value; wires live-apply; installs Harmony + reapplier | `src/Plugin.cs` | BepInEx, Harmony |
-| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original textures | `src/BatColorPatch.cs` (656) | TextureRecolor, Plugin statics |
-| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; result cache | `src/TextureRecolor.cs` (460) | UnityEngine, RecolorSpecs |
+| **Plugin** | BepInEx entry; binds every config value; wires live-apply; installs Harmony + reapplier; purges the recolour caches on teardown (`OnDestroy`) | `src/Plugin.cs` | BepInEx, Harmony, RecolorTextureCache, RendererOverrideStore |
+| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original state via RendererOverrideStore | `src/BatColorPatch.cs` (642) | TextureRecolor, RendererOverrideStore, Plugin statics |
+| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path; delegates result caching to RecolorTextureCache | `src/TextureRecolor.cs` (464) | UnityEngine, RecolorSpecs, RecolorTextureCache |
 | **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours. Also holds the bat-body `SpatialRegion` (its only consumer is `SkinPaletteSpec`) | `src/RecolorSpecs.cs` | UnityEngine |
-| **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit) | `src/BatColorReapplier.cs` | BatColorPatch |
+| **Recolour texture cache** | Bounded LRU (cap 32) of regenerated textures; `Destroy`s evicted textures + purge-on-teardown, so wardrobe fiddling can't leak. LRU never evicts the active palette (reapplier keeps it MRU) | `src/RecolorTextureCache.cs` | UnityEngine |
+| **Renderer override store** | The four `Original*` maps (texture/tint/wing-dust/particle-start) captured for restore-on-blank; `Purge()` on teardown + `PruneDead()` drops entries for destroyed Materials/ParticleSystems | `src/RendererOverrideStore.cs` | UnityEngine |
+| **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit); prunes dead override entries every ~600 frames | `src/BatColorReapplier.cs` | BatColorPatch, RendererOverrideStore |
 | **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel; hides VFX/bloom | `src/BatFormWardrobe.cs` (497) | BatColorPatch, BatFormColorPanel, TabIcon, PreviewBloomSuppressor |
 | **Colour panel** | Builds the scrollable swatch/slider/toggle panel; selection state; opens the picker | `src/BatFormColorPanel.cs` (753) | BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
 | **Cloned swatch** | One colour swatch cloned from the game's own widget (ring/checkmark/hover sound) | `src/BatFormSwatch.cs` | Templates (reflection), ScrollForwarder |
@@ -109,11 +111,12 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   drift would silently drop a setting from revert-on-cancel. Wants one palette-config owner exposing
   an immutable snapshot consumed by the engine (`ApplyToBody(body, BatPaletteValues)`), removing the
   plugin-as-service-locator smell. *(Deferred: architecture change.)*
-- **P1 — Recolour caches have no lifecycle.** `TextureRecolor.Cache` and the four original-state
-  dictionaries in `BatColorPatch` grow unbounded (new `Texture2D` per distinct palette; new dict keys
-  per body-swap material) with no eviction or `Destroy`. A slow leak. Wants a plugin-owned
-  `RecolorTextureCache` + `RendererOverrideStore` with explicit purge on teardown. *(Deferred: has a
-  correctness angle; see BACKLOG.)*
+- **P1 — Recolour caches have no lifecycle. ✅ RESOLVED 2026-08-22.** Extracted `RecolorTextureCache`
+  (bounded LRU that `Destroy`s evicted textures — caps the per-palette leak — plus purge-on-teardown)
+  and `RendererOverrideStore` (the four original-state maps, with `Purge()` on teardown and
+  `PruneDead()` for destroyed Materials/ParticleSystems, run periodically by the reapplier). Plugin
+  `OnDestroy` purges both. LRU eviction is safe against in-use textures because the per-frame reapplier
+  keeps active palettes most-recently-used. *(Correctness fix; wants in-game verification.)*
 - **P2 — Engine vs bat-specific code welded in `TextureRecolor.cs`.** The generic HSV engine (meant
   to be copied verbatim to the next mod) and the bat-only palette-remap/UV-compositing (`GetOrBuildBatBody`)
   still live in one file, so porting means hand-picking lines. Split into `TextureRecolor.cs` (generic) +

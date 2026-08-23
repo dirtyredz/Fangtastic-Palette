@@ -216,6 +216,11 @@ namespace FangtasticPalette
         private void OnDestroy()
         {
             harmony?.UnpatchSelf();
+
+            // Free the recolour caches on teardown so they don't outlive the plugin. RecolorTextureCache
+            // Destroys its generated textures; RendererOverrideStore just clears its captured originals.
+            RecolorTextureCache.Purge();
+            RendererOverrideStore.Purge();
         }
     }
 }

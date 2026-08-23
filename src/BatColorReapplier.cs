@@ -21,9 +21,21 @@ namespace FangtasticPalette
     /// </summary>
     internal sealed class BatColorReapplier : MonoBehaviour
     {
+        // Prune dead captured-original entries periodically (not every frame - it walks the maps).
+        // ~600 frames ≈ 10s at 60fps: dead Materials/ParticleSystems only appear on a body swap, so
+        // this is far more often than needed while costing nothing on the hot path.
+        private const int PruneEveryFrames = 600;
+        private int framesSincePrune;
+
         private void Update()
         {
             BatColorPatch.ApplyBatColors(logVerbose: false, includeEyes: true);
+
+            if (++framesSincePrune >= PruneEveryFrames)
+            {
+                framesSincePrune = 0;
+                RendererOverrideStore.PruneDead();
+            }
         }
     }
 }

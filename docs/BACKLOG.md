@@ -20,9 +20,11 @@ _None._ The review found no P0 structural rot.
   (dedupe `Plugin` binds / `Rows` / `ManagedColors` / direct static reads); pass a `BatPaletteValues`
   snapshot into `ApplyToBody` so the engine doesn't depend on BepInEx statics. Also closes the
   `Rows`↔`ManagedColors` drift trap.
-- [ ] **Give recolour caches a lifecycle.** `TextureRecolor.Cache` + the four `Original*` dictionaries
-  grow unbounded with no eviction/`Destroy`. Extract `RecolorTextureCache` + `RendererOverrideStore`
-  with purge-on-teardown. *(Correctness: a slow texture/memory leak.)*
+- [x] **Give recolour caches a lifecycle.** ✅ 2026-08-22 — extracted `RecolorTextureCache` (bounded
+  LRU, cap 32, `Destroy`s evicted textures + purge-on-teardown) and `RendererOverrideStore` (the four
+  `Original*` maps; `Purge()` on teardown + `PruneDead()` for destroyed Materials/ParticleSystems).
+  `Plugin.OnDestroy` purges both; the reapplier prunes every ~600 frames. *(Correctness: fixes the slow
+  texture/memory leak. Wants in-game verify — rapid colour changes must not pink out.)*
 
 ## P2 — nice to have
 - [ ] **Split `TextureRecolor.cs`** into generic engine + `BatBodyPaletteRemap.cs` (bat-only), so the
@@ -48,6 +50,10 @@ _None._ The review found no P0 structural rot.
   since each mod is a standalone repo.
 
 ## Done (2026-08-22)
+- [x] **Recolour cache lifecycle** (P1). New `src/RecolorTextureCache.cs` (bounded LRU, Destroys
+  evicted textures + purge-on-teardown) and `src/RendererOverrideStore.cs` (the four `Original*` maps
+  + `Purge()`/`PruneDead()`). `Plugin.OnDestroy` purges both; reapplier prunes dead refs periodically.
+  Fixes the slow texture/memory leak. *In-game verify pending (pink-out check on rapid changes).*
 - [x] **`TextureRecolor` parameter-object refactor** (P1). `EyeRecolorSpec`/`SkinPaletteSpec` in new
   `src/RecolorSpecs.cs`; specs own their cache `Key`. Killed the `hex`-proxy cache key and the
   redundant `cacheDiscriminator`. Engine 544→460 lines; builds clean. Verified in-game (Body/Eyes

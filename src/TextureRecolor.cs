@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace FangtasticPalette
@@ -26,11 +25,10 @@ namespace FangtasticPalette
     /// </summary>
     internal static class TextureRecolor
     {
-        // String-keyed: each entry's key is the source texture's instance id folded together with
-        // the recolour spec's own Key (EyeRecolorSpec / SkinPaletteSpec), which covers every field.
-        // Any change to source or spec produces a distinct entry, so the cache can never collide two
-        // genuinely different recolours.
-        private static readonly Dictionary<string, Texture2D> Cache = new Dictionary<string, Texture2D>();
+        // Regenerated textures are stored in RecolorTextureCache - a bounded LRU that Destroys evicted
+        // textures and is purged on plugin teardown. Each cache key is the source texture's instance
+        // id folded with the recolour spec's own Key (EyeRecolorSpec / SkinPaletteSpec), which covers
+        // every field, so the cache can never collide two genuinely different recolours.
 
         /// <summary>
         /// HSV colorize + eye brightness-split. All the classifier/mask/floor knobs live on
@@ -40,13 +38,13 @@ namespace FangtasticPalette
         internal static Texture2D GetOrBuild(Texture source, in EyeRecolorSpec spec)
         {
             var key = source.GetInstanceID() + "|" + spec.Key;
-            if (Cache.TryGetValue(key, out var cached) && cached != null)
+            if (RecolorTextureCache.TryGet(key, out var cached))
             {
                 return cached;
             }
 
             var result = Build(source, spec, key);
-            Cache[key] = result;
+            RecolorTextureCache.Add(key, result);
             return result;
         }
 
@@ -199,11 +197,18 @@ namespace FangtasticPalette
         {
             var cacheKey = spec.Key;
             var key = "batbody|" + source.GetInstanceID() + "|" + cacheKey;
-            if (Cache.TryGetValue(key, out var cached) && cached != null)
+            if (RecolorTextureCache.TryGet(key, out var cached))
             {
                 return cached;
             }
 
+            var result = BuildBatBody(source, spec, cacheKey);
+            RecolorTextureCache.Add(key, result);
+            return result;
+        }
+
+        private static Texture2D BuildBatBody(Texture source, in SkinPaletteSpec spec, string cacheKey)
+        {
             var bodyColor = spec.BodyColor;
             var rimColor = spec.RimColor;
             var beigeColor = spec.BeigeColor;
@@ -339,7 +344,6 @@ namespace FangtasticPalette
             };
             result.SetPixels(outPixels);
             result.Apply();
-            Cache[key] = result;
             return result;
         }
 
