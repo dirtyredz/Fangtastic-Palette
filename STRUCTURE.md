@@ -112,8 +112,12 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   drift trap — plus `Snapshot()` → immutable `BatPaletteValues` threaded through
   `ApplyToBody(body, in BatPaletteValues)` and the whole apply chain, so the engine no longer reads
   `FangtasticPalettePlugin.*` statics. Config binding stays in `Plugin` (keys/defaults/Mod Nook tags
-  unchanged — no `.cfg` compat risk); `BatPalette` references the bound entries. *(Wants in-game
-  verification: panel rows, live preview, revert-on-cancel.)*
+  unchanged — no `.cfg` compat risk); `BatPalette` references the bound entries. **Residual asymmetry
+  (accepted):** only the `Rows`↔`ManagedColors` trap is fully closed (both derive from `Colors`).
+  `BatPaletteValues`/`Snapshot()` is a separate named enumeration — the engine needs per-part fields
+  (each part has bespoke routing) and the snapshot also carries the 4 intensities + wing strength that
+  aren't in `Colors` — so adding a colour still means a `BatPaletteValues` field + engine routing
+  (inherent, not incidental duplication). *(Verified in-game: panel rows, live preview, revert-on-cancel.)*
 - **P1 — Recolour caches have no lifecycle. ✅ RESOLVED 2026-08-22.** Extracted `RecolorTextureCache`
   (bounded LRU that `Destroy`s evicted textures — caps the per-palette leak — plus purge-on-teardown)
   and `RendererOverrideStore` (the four original-state maps, with `Purge()` on teardown and

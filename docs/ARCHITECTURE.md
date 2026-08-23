@@ -47,7 +47,9 @@ Everything is a **texture regeneration**, not a tint:
 
 **Live recolour**
 ```
-body loads ─► BatColorPatch.Postfix ─► ApplyBatColors ─► ApplyToBody(bodyView)
+body loads ─► BatColorPatch.Postfix ─► ApplyBatColors ─► ApplyToBody(bodyView, BatPalette.Snapshot())
+   (the immutable BatPaletteValues snapshot is threaded through the whole chain; the engine
+    reads it, never BepInEx statics)
    for each renderer: Bat_Body → ApplyBodyColor → TextureRecolor.GetOrBuildBatBody (cached)
                       eyes     → ApplyEyeColor  → TextureRecolor.GetOrBuild   (cached)
                       dust     → ApplyWingDustColor (HSV shift, no regen)
@@ -58,7 +60,7 @@ body loads ─► BatColorPatch.Postfix ─► ApplyBatColors ─► ApplyToBody
 ```
 WardrobeCustomizationScreen.OnShow ─► add "Bat Form" tab (only if player owns Bat Form)
    tab select ─► instantiate a bat body into the preview rig, hide other bodies + VFX + bloom
-             ─► ApplyToBody(previewInstance)  (separate material instances from the live player)
+             ─► ApplyToBody(previewInstance, BatPalette.Snapshot())  (separate material instances)
              ─► build the swatch/slider panel
    swatch pick ─► write ConfigEntry (live preview) ─► recolour preview + live player
    Confirm ─► keep;  close-without-confirm ─► restore the colour snapshot (reverts world too)
