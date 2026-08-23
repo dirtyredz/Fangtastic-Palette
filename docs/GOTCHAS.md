@@ -27,6 +27,11 @@ Non-obvious traps. Format: **trap → why → do instead**.
   (`PreviewBloomSuppressor`).**
 - **The preview bat is a separate instance from the live player → colours applied to the player don't
   carry over → call `BatColorPatch.ApplyToBody(previewInstance)` explicitly.**
+- **`RecolorTextureCache`'s LRU eviction is only safe because every in-use texture is re-touched often
+  enough to stay off the tail → the live body via the per-frame reapplier, and the wardrobe preview via
+  a *whole-body* reapply on each slider event → if you ever optimise the wardrobe to reapply only the
+  changed control, the preview's other textures could age out and be `Destroy`d while still assigned
+  (pink-out) → keep reapplying the full body, raise the cap, or pin currently-assigned textures.**
 - **The sibling Cat Form tab shares the preview parent and gets no teardown when our tab is picked →
   switching Cat→Bat can leave the cat on screen → deactivate every `BodyViewAsset` under the parent,
   then show only ours.**

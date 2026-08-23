@@ -116,7 +116,8 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   and `RendererOverrideStore` (the four original-state maps, with `Purge()` on teardown and
   `PruneDead()` for destroyed Materials/ParticleSystems, run periodically by the reapplier). Plugin
   `OnDestroy` purges both. LRU eviction is safe against in-use textures because the per-frame reapplier
-  keeps active palettes most-recently-used. *(Correctness fix; wants in-game verification.)*
+  keeps active palettes most-recently-used (with a wardrobe-preview caveat — see docs/GOTCHAS.md).
+  *(Correctness fix; verified in-game — 30+ rapid colour changes, no pink-out.)*
 - **P2 — Engine vs bat-specific code welded in `TextureRecolor.cs`.** The generic HSV engine (meant
   to be copied verbatim to the next mod) and the bat-only palette-remap/UV-compositing (`GetOrBuildBatBody`)
   still live in one file, so porting means hand-picking lines. Split into `TextureRecolor.cs` (generic) +

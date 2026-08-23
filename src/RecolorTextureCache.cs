@@ -10,11 +10,15 @@ namespace FangtasticPalette
     /// and never free them (a slow leak). This caps the live set and <c>Object.Destroy</c>s whatever
     /// falls off the least-recently-used end.
     ///
-    /// Evicting the LRU entry is safe against destroying an in-use texture: the per-frame
-    /// <see cref="BatColorReapplier"/> re-fetches the active palettes every Update, so their keys are
-    /// continually touched (<see cref="TryGet"/> moves a hit to the front) and stay at the
-    /// most-recently-used end - only genuinely stale palettes (previous, no-longer-applied colour
-    /// choices) age out to the tail.
+    /// Evicting the LRU entry is safe against destroying an in-use texture ONLY because every in-use
+    /// texture is re-touched often enough to stay off the tail (<see cref="TryGet"/> moves a hit to
+    /// the front): the live player body via the per-frame <see cref="BatColorReapplier"/>, and the
+    /// wardrobe preview via a WHOLE-body reapply on each slider event. So only genuinely stale palettes
+    /// (previous, no-longer-applied colour choices) age out to the tail. CAVEAT: this invariant leans
+    /// on the preview being fully reapplied per change - if the wardrobe is ever optimised to reapply
+    /// only the changed control, the preview's other textures could age out and be destroyed while
+    /// still assigned (pink-out); keep reapplying the full body, raise the cap, or pin assigned
+    /// textures. (See docs/GOTCHAS.md.)
     ///
     /// The <see cref="TryGet"/> / <see cref="Add"/> split (rather than a Func-based GetOrAdd) keeps
     /// the reapplier's every-frame hit path allocation-free - no closure is captured on a cache hit.
