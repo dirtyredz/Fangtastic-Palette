@@ -141,9 +141,9 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   panel.
 - **P2 — Duplicated `capture-original / restore-on-blank` logic** (3 near-identical blocks + 4 dicts
   in `BatColorPatch`) → a small `OriginalValueCache<TKey,TValue>`. Cheap, low-risk when tackled.
-- **P2 — Small duplication/dead code:** `AddTrigger` is byte-identical in `BatFormColorPanel` and
+- **P2 — Small duplication/dead code:** `AddTrigger` is byte-identical in `PanelControls` and
   `BatFormSwatch`; two colour-parsers have **drifted** (`BatColorPatch.TryParseColor` retries a
-  missing `#`, `BatFormColorPanel.ParseOr` doesn't); unused generality (`TextureRecolor` passHue* is
+  missing `#`, `SwatchGrid.ParseOr` doesn't); unused generality (`TextureRecolor` passHue* is
   never exercised by the bat). Want a shared `ColorHex`/UI-helper.
 
 **Shared-methodology note (do NOT refactor across repos):** `TextureRecolor`'s robust readback +

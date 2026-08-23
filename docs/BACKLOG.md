@@ -34,9 +34,9 @@ _None._ The review found no P0 structural rot.
 - [ ] **Extract the three appliers** in `BatColorPatch.cs` (body/eye/wing-dust) along the existing
   comment seams. Lower priority — cohesive today.
 - [ ] **`OriginalValueCache<TKey,TValue>`** for the 3 duplicated capture/restore blocks + 4 dicts.
-- [ ] **Unify colour parsing.** `BatColorPatch.TryParseColor` retries a missing `#`; `BatFormColorPanel.ParseOr`
+- [ ] **Unify colour parsing.** `BatColorPatch.TryParseColor` retries a missing `#`; `SwatchGrid.ParseOr`
   doesn't — they've drifted. Add a shared `ColorHex` helper.
-- [ ] **Dedupe `AddTrigger`** (byte-identical in `BatFormColorPanel` + `BatFormSwatch`).
+- [ ] **Dedupe `AddTrigger`** (byte-identical in `PanelControls` + `BatFormSwatch`).
 - [ ] **Trim dead generality:** `TextureRecolor` passHue* params are never exercised by the bat.
 - [ ] **Intensity/strength sliders don't revert on wardrobe-cancel.** Include the float configs in the
   snapshot/revert. *(Correctness/UX; confirmed by Codex.)*

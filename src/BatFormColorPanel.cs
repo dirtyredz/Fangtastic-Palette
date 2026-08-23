@@ -47,6 +47,7 @@ namespace FangtasticPalette
                 SwatchGrid.Reset();
                 SwatchGrid.OnColorChanged = () => OnColorChanged?.Invoke();
                 SwatchGrid.RequestRebuild = () => { if (lastParent != null) { Build(lastParent); } };
+                SwatchGrid.PanelRoot = () => root != null ? (RectTransform)root.transform : null;
 
                 root = new GameObject("FangtasticPalette_ColorPanel", typeof(RectTransform));
                 root.transform.SetParent(parent, false);

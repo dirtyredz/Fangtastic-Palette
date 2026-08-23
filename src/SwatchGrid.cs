@@ -46,6 +46,9 @@ namespace FangtasticPalette
         // Injected by BatFormColorPanel.Build so this component never references the orchestrator.
         internal static Action OnColorChanged;
         internal static Action RequestRebuild;
+        // The panel root, used only as the picker's fallback parent when no Canvas is found (a
+        // defensive path). Provided by the orchestrator to preserve the pre-split behaviour.
+        internal static Func<RectTransform> PanelRoot;
 
         internal static int Count => Swatches.Count;
 
@@ -281,7 +284,13 @@ namespace FangtasticPalette
         {
             var initial = ParseOr(setting.Value, Color.white);
             var canvas = context.GetComponentInParent<Canvas>();
-            var pickerParent = canvas != null ? (RectTransform)canvas.transform : (RectTransform)context.root;
+            // Prefer the Canvas (overlay). Fall back to the panel root (the pre-split behaviour), NOT
+            // Transform.root - the scene root isn't guaranteed to carry a RectTransform, so casting it
+            // could throw; and NOT `context`, which is the swatch GridLayoutGroup that would lay the
+            // popup out as a grid cell. (Canvas is found in practice; this is defensive.)
+            var pickerParent = canvas != null
+                ? (RectTransform)canvas.transform
+                : (PanelRoot?.Invoke() ?? context as RectTransform);
             ColorPickerPopup.Open(pickerParent, initial, chosen =>
             {
                 Apply(setting, "#" + ColorUtility.ToHtmlStringRGB(chosen));
