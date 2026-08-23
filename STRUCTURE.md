@@ -13,7 +13,7 @@ Two cooperating layers, cleanly separated (verified: the engine never references
 - **Wardrobe UI** — injects a "Bat Form" tab into the mirror's wardrobe with a live preview, swatch
   pickers, sliders, and an RGB colour picker, all cloned from the game's own widgets.
 
-Source is flat in `src/` (no `src/FangtasticPalette/`), 22 files, ~4,500 lines. It is the second entry
+Source is flat in `src/` (no `src/FangtasticPalette/`), 24 files, ~4,500 lines. It is the second entry
 in the "…tastic Palette" set after the sibling **PurrtasticPalette** (cat); much of the machinery is a
 port, and a third (Fintastic / mermaid) is planned to reuse it again.
 
@@ -52,7 +52,9 @@ ENGINE                                        UI (wardrobe)
 | **Renderer override store** | The four `Original*` maps (texture/tint/wing-dust/particle-start) captured for restore-on-blank; `Purge()` on teardown + `PruneDead()` drops entries for destroyed Materials/ParticleSystems | `src/RendererOverrideStore.cs` | UnityEngine |
 | **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit); prunes dead override entries every ~600 frames | `src/BatColorReapplier.cs` | BatColorPatch, RendererOverrideStore |
 | **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel (colours from BatPalette); hides VFX/bloom | `src/BatFormWardrobe.cs` (486) | BatColorPatch, BatFormColorPanel, BatPalette, TabIcon, PreviewBloomSuppressor |
-| **Colour panel** | Builds the scrollable swatch/slider/toggle panel (rows from BatPalette.Colors); selection state; opens the picker | `src/BatFormColorPanel.cs` (734) | BatPalette, BatFormSwatch, ColorPickerPopup, sprites, GameFonts, HeaderDecoration |
+| **Colour panel (orchestrator)** | Composes the scrollable panel + deterministic height arithmetic; declarative colour→intensity-slider map (no label `switch`) | `src/BatFormColorPanel.cs` (150) | BatPalette, SwatchGrid, PanelControls, ColorPickerPopup |
+| **Swatch grid** | One colour's swatch grid: cloned-or-drawn swatches, "+" custom tile + picker, selection state + `RefreshSelection` | `src/SwatchGrid.cs` | PanelControls, BatFormSwatch, ColorPickerPopup, sprites, GameFonts |
+| **Panel controls** | Reusable control-row builders (label / toggle / slider) + RectTransform primitives (`Stretch`/`ThinCenteredBar`/`AddTrigger`) | `src/PanelControls.cs` | PanelSprite, CircleSprite, GameFonts, HeaderDecoration, ScrollForwarder |
 | **Cloned swatch** | One colour swatch cloned from the game's own widget (ring/checkmark/hover sound) | `src/BatFormSwatch.cs` | Templates (reflection), ScrollForwarder |
 | **Colour picker** | Modal RGB picker adapted from ModNook; clones the game `SliderButton` | `src/ColorPickerPopup.cs` | Templates, PanelSprite, GameFonts |
 | **Widget cloning** | Sources & clones native game widgets (SliderButton) without waking them | `src/Templates.cs` | Chicken.UI |
@@ -100,12 +102,14 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
   caller-supplied `cacheDiscriminator`. Behaviour-preserving: the pixel loops are byte-identical
   (specs unpack to the same locals at the top). *In-game recolour verification still pending before
   the next release.*
-- **P1 — `BatFormColorPanel.cs` (753 lines) is a God-file.** Screen composition + layout arithmetic +
-  three widget builders (swatch/slider/toggle) + two swatch implementations + picker wiring +
-  selection state. Extract: declarative `ColorControlSpec` (kills the label-string `switch`), a
-  `SwatchGrid`/`SwatchView` owning cloned-vs-drawn fallback + refresh, and reusable slider/toggle row
-  builders. Consistent with the mod's own pattern (ColorPickerPopup/HeaderDecoration are one-widget
-  files). *(Deferred: UI refactor wants in-game layout verification.)*
+- **P1 — `BatFormColorPanel.cs` (753 lines) is a God-file. ✅ RESOLVED 2026-08-22.** Split into three:
+  `BatFormColorPanel.cs` (150 — orchestrator: composition + height arithmetic + a declarative
+  colour→intensity-slider map that replaces the label-string `switch`), `SwatchGrid.cs` (353 — the
+  swatch subsystem: cloned-vs-drawn swatches, custom tile + picker, selection state + `RefreshSelection`),
+  and `PanelControls.cs` (289 — reusable label/toggle/slider row builders + RectTransform primitives).
+  Dependencies are one-directional (SwatchGrid→PanelControls; orchestrator→both), with
+  `OnColorChanged`/`RequestRebuild` callbacks injected so the sub-components never reference the
+  orchestrator. *(Verified in-game: all rows render, live preview, revert-on-cancel, custom picker.)*
 - **P1 — Palette-setting knowledge is duplicated. ✅ RESOLVED 2026-08-22.** Introduced `BatPalette`
   as the single source of truth: a canonical ordered `Colors` list that `BatFormColorPanel` (rows) and
   `BatFormWardrobe.ManagedColors()` (revert) both derive from — closing the `Rows`↔`ManagedColors`

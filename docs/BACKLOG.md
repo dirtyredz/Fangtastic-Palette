@@ -13,9 +13,10 @@ _None._ The review found no P0 structural rot.
   `hex`-proxy cache key (`target` is now folded into the key) and removed the redundant caller-built
   `cacheDiscriminator`. Behaviour-preserving by construction (pixel loops byte-identical; cache keys
   equivalent-or-more-precise). *Still wants in-game recolour verification before the next release.*
-- [ ] **Split `BatFormColorPanel.cs` (753 lines).** Extract a declarative `ColorControlSpec` (kills the
-  label-string `switch`), a `SwatchGrid`/`SwatchView` (cloned-vs-drawn fallback + refresh), and reusable
-  slider/toggle row builders. *Wants in-game layout verification.*
+- [x] **Split `BatFormColorPanel.cs` (753 lines).** ✅ 2026-08-22 — split into `BatFormColorPanel.cs`
+  (150, orchestrator + declarative colour→intensity map replacing the `switch`), `SwatchGrid.cs` (353,
+  swatch subsystem + selection), and `PanelControls.cs` (289, reusable row builders + primitives).
+  One-directional deps, callbacks injected. *Verified in-game (rows, live preview, revert, picker).*
 - [x] **Single palette-config owner + immutable snapshot.** ✅ 2026-08-22 — new `src/BatPalette.cs`:
   canonical `Colors` list (panel rows + wardrobe `ManagedColors` both derive from it → drift trap
   closed) + `Snapshot()` → `BatPaletteValues` threaded through `ApplyToBody(body, in BatPaletteValues)`
@@ -51,6 +52,9 @@ _None._ The review found no P0 structural rot.
   since each mod is a standalone repo.
 
 ## Done (2026-08-22)
+- [x] **Split the `BatFormColorPanel` God-file** (P1). 753 → `BatFormColorPanel.cs` (150, orchestrator +
+  declarative intensity map, no `switch`) + `SwatchGrid.cs` (353, swatches + selection) + `PanelControls.cs`
+  (289, reusable row builders). One-directional deps; callbacks injected. *In-game verify pending.*
 - [x] **Single palette-config owner** (P1). New `src/BatPalette.cs` — canonical `Colors` list (panel
   rows + wardrobe revert derive from it) + `Snapshot()`/`BatPaletteValues` threaded through the engine
   so it no longer reads config statics. Config binding stays in `Plugin`. *In-game verify pending.*

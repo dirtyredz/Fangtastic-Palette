@@ -1,46 +1,37 @@
 using System;
 using System.Collections.Generic;
 using BepInEx.Configuration;
-using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace FangtasticPalette
 {
     /// <summary>
-    /// The Bat Form tab's own panel: a scrollable column of colour-swatch rows, one row per visible
-    /// part. Each swatch prefers a clone of the game's own swatch widget (via <see cref="BatFormSwatch"/>
-    /// - real selection ring, checkmark, hover sound), falling back to a drawn circle if the
-    /// template can't be found. Ported from Purrtastic Palette; see repo root 17-wardrobe-ui.md.
+    /// The Bat Form tab's panel: a scrollable column of a Freeze-Flap toggle + one colour-swatch row
+    /// per part (each with its intensity/strength slider tucked underneath). This class is the
+    /// orchestrator - it composes the panel and does the deterministic height arithmetic that makes it
+    /// scroll (see the note in <see cref="Build"/>). The pieces live in their own components: the
+    /// swatch grid + selection in <see cref="SwatchGrid"/>, the reusable control-row builders in
+    /// <see cref="PanelControls"/>. Ported from Purrtastic Palette; see repo root 17-wardrobe-ui.md.
     /// </summary>
     internal static class BatFormColorPanel
     {
-        // The colourable parts (label + ConfigEntry + vanilla "Default" swatch colour) come from the
-        // single source of truth, BatPalette.Colors - so the panel's rows and the wardrobe's
-        // revert-on-cancel list can't drift.
-
-        private static readonly (string Label, string Hex)[] Presets =
-        {
-            ("Black", "#141018"),
-            ("White", "#F2ECFF"),
-            ("Red", "#FF4339"),
-            ("Orange", "#FF8A3D"),
-            ("Gold", "#FCD34D"),
-            ("Green", "#4ADE80"),
-            ("Teal", "#2DD4BF"),
-            ("Blue", "#5ACEF9"),
-            ("Indigo", "#7F54D3"),
-            ("Violet", "#E452FC"),
-            ("Pink", "#FF7AC6"),
-        };
-
-        private const float SwatchSize = 90f;
+        // Declarative colour -> intensity/strength slider map (replaces a label-string switch): a
+        // colour row gets the matching slider tucked directly beneath it; colours absent from the map
+        // (Fangs, Eyes, Pupil, Eye Highlight) have none. Keyed by BatPalette.Colors' label.
+        private static readonly Dictionary<string, (string Label, Func<ConfigEntry<float>> Setting, float Min, float Max)>
+            IntensitySliders =
+                new Dictionary<string, (string, Func<ConfigEntry<float>>, float, float)>
+                {
+                    ["Body"] = ("Body Intensity", () => FangtasticPalettePlugin.BodyIntensity, 0f, 1f),
+                    ["Ears"] = ("Ear Intensity", () => FangtasticPalettePlugin.EarIntensity, 0f, 1f),
+                    ["Mouth"] = ("Mouth Intensity", () => FangtasticPalettePlugin.MouthIntensity, 0f, 1f),
+                    ["Face"] = ("Face Intensity", () => FangtasticPalettePlugin.FaceIntensity, 0f, 1f),
+                    ["Wing Dust"] = ("Wing Dust Strength", () => FangtasticPalettePlugin.WingDustStrength, 1f, 6f),
+                };
 
         private static GameObject root;
         private static Transform lastParent;
-        private static readonly List<SwatchEntry> Swatches = new List<SwatchEntry>();
-        private static readonly List<BatFormSwatch> ClonedSwatches = new List<BatFormSwatch>();
 
         internal static Action OnColorChanged;
 
@@ -53,8 +44,9 @@ namespace FangtasticPalette
 
             try
             {
-                Swatches.Clear();
-                ClonedSwatches.Clear();
+                SwatchGrid.Reset();
+                SwatchGrid.OnColorChanged = () => OnColorChanged?.Invoke();
+                SwatchGrid.RequestRebuild = () => { if (lastParent != null) { Build(lastParent); } };
 
                 root = new GameObject("FangtasticPalette_ColorPanel", typeof(RectTransform));
                 root.transform.SetParent(parent, false);
@@ -83,39 +75,23 @@ namespace FangtasticPalette
                 var rowCount = 0;
 
                 // Preview control first, so it's the first thing seen when the tab opens.
-                totalHeight += AddToggleRow(root.transform, "Freeze Flap", FangtasticPalettePlugin.FreezePreviewFlap);
+                totalHeight += PanelControls.AddToggleRow(root.transform, "Freeze Flap", FangtasticPalettePlugin.FreezePreviewFlap);
                 rowCount++;
 
                 // Each colour row, with its own intensity/strength slider tucked directly underneath
-                // (Body/Ears/Face/Wing Dust have one; the rest don't). Grouping the slider with its
-                // colour reads better than a block of loose sliders at the bottom.
+                // (Body/Ears/Mouth/Face/Wing Dust have one; the rest don't). Grouping the slider with
+                // its colour reads better than a block of loose sliders at the bottom.
                 foreach (var (label, setting, defaultColor) in BatPalette.Colors)
                 {
-                    totalHeight += AddRow(root.transform, label, setting(), defaultColor);
+                    totalHeight += SwatchGrid.AddColorRow(root.transform, label, setting(), defaultColor);
                     rowCount++;
 
-                    switch (label)
+                    if (IntensitySliders.TryGetValue(label, out var slider))
                     {
-                        case "Body":
-                            totalHeight += AddSliderRow(root.transform, "Body Intensity", FangtasticPalettePlugin.BodyIntensity, 0f, 1f);
-                            rowCount++;
-                            break;
-                        case "Ears":
-                            totalHeight += AddSliderRow(root.transform, "Ear Intensity", FangtasticPalettePlugin.EarIntensity, 0f, 1f);
-                            rowCount++;
-                            break;
-                        case "Mouth":
-                            totalHeight += AddSliderRow(root.transform, "Mouth Intensity", FangtasticPalettePlugin.MouthIntensity, 0f, 1f);
-                            rowCount++;
-                            break;
-                        case "Face":
-                            totalHeight += AddSliderRow(root.transform, "Face Intensity", FangtasticPalettePlugin.FaceIntensity, 0f, 1f);
-                            rowCount++;
-                            break;
-                        case "Wing Dust":
-                            totalHeight += AddSliderRow(root.transform, "Wing Dust Strength", FangtasticPalettePlugin.WingDustStrength, 1f, 6f);
-                            rowCount++;
-                            break;
+                        totalHeight += PanelControls.AddSliderRow(
+                            root.transform, slider.Label, slider.Setting(), slider.Min, slider.Max,
+                            () => OnColorChanged?.Invoke());
+                        rowCount++;
                     }
                 }
 
@@ -137,7 +113,7 @@ namespace FangtasticPalette
                 rootElement.minHeight = totalHeight;
                 rootElement.flexibleHeight = 0f;
 
-                RefreshSelection();
+                SwatchGrid.RefreshSelection();
 
                 // Recompute the parent Content's ContentSizeFitter and the ScrollRect now, so the
                 // panel is the right height and scrollable on the very first frame rather than after
@@ -151,7 +127,7 @@ namespace FangtasticPalette
                 FangtasticPalettePlugin.Log.LogInfo(
                     $"[FangtasticPalette] Wardrobe: colour panel built - parent '{parent.name}', " +
                     $"panel rect {rect.width:F0}x{rect.height:F0}, target height {totalHeight:F0}, " +
-                    $"{root.transform.childCount} row(s), {Swatches.Count} swatch(es), " +
+                    $"{root.transform.childCount} row(s), {SwatchGrid.Count} swatch(es), " +
                     $"activeInHierarchy={root.activeInHierarchy}.");
             }
             catch (Exception e)
@@ -159,7 +135,6 @@ namespace FangtasticPalette
                 FangtasticPalettePlugin.Log.LogError($"[FangtasticPalette] Wardrobe: failed to build the colour panel: {e}");
             }
         }
-
 
         internal static void Destroy()
         {
@@ -170,565 +145,6 @@ namespace FangtasticPalette
             }
 
             root = null;
-        }
-
-
-        /// <returns>The row's height, so the caller can size the scroll content deterministically.</returns>
-        private static float AddRow(Transform parent, string label, ConfigEntry<string> setting, Color defaultColor)
-        {
-            const int columns = 5;
-            const float spacing = 20f;
-            const float labelHeight = 40f;
-            // Extra height reserved at the bottom of each row so the selection frame (the bat
-            // wings) and the checkmark of the last swatch row - which extend past the swatch cell -
-            // don't collide with the next row's header.
-            const float frameOverflow = 24f;
-
-            var swatchCount = 1 + Presets.Length + 1; // default + presets + custom
-            var gridRows = Mathf.CeilToInt(swatchCount / (float)columns);
-            var gridHeight = gridRows * SwatchSize + (gridRows - 1) * spacing;
-            var rowHeight = labelHeight + 56f + gridHeight + frameOverflow; // 56f = header-to-grid gap
-
-            var row = new GameObject($"Row_{label}", typeof(RectTransform));
-            row.transform.SetParent(parent, false);
-
-            var rowLayout = row.AddComponent<VerticalLayoutGroup>();
-            rowLayout.spacing = 56f;
-            // Same reason as the root group: true so the label and grid stack by their own
-            // heights instead of overlapping.
-            rowLayout.childControlHeight = true;
-            rowLayout.childControlWidth = true;
-            rowLayout.childForceExpandHeight = false;
-
-            var rowElement = row.AddComponent<LayoutElement>();
-            rowElement.preferredHeight = rowHeight;
-            rowElement.minHeight = rowHeight;
-
-            AddLabel(row.transform, label, labelHeight);
-
-            var grid = new GameObject("Swatches", typeof(RectTransform));
-            grid.transform.SetParent(row.transform, false);
-            var gridLayout = grid.AddComponent<GridLayoutGroup>();
-            gridLayout.cellSize = new Vector2(SwatchSize, SwatchSize);
-            gridLayout.spacing = new Vector2(spacing, spacing);
-            gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            gridLayout.constraintCount = columns;
-            // Centre the block of swatches in the (full-width) row rather than left-packing it.
-            gridLayout.childAlignment = TextAnchor.UpperCenter;
-
-            var gridElement = grid.AddComponent<LayoutElement>();
-            gridElement.preferredHeight = gridHeight;
-            gridElement.minHeight = gridHeight;
-
-            // Default first, painted in the part's real vanilla colour.
-            AddSwatch(grid.transform, "Default", string.Empty, defaultColor, setting);
-
-            foreach (var (presetLabel, hex) in Presets)
-            {
-                AddSwatch(grid.transform, presetLabel, hex, ParseOr(hex, Color.magenta), setting);
-            }
-
-            AddCustomTile(grid.transform, setting);
-
-            return rowHeight;
-        }
-
-        /// <summary>
-        /// A labelled On/Off toggle bound to a bool config entry - a pill that shows accent/"On" when
-        /// set and dim/"Off" when clear. Writing the config raises SettingChanged, which the plugin
-        /// routes to BatFormWardrobe.ApplyFlapFreeze, so the preview updates live. Returns row height.
-        /// </summary>
-        private static float AddToggleRow(Transform parent, string label, ConfigEntry<bool> setting)
-        {
-            const float labelHeight = 40f;
-            const float gap = 30f;
-            const float toggleHeight = 56f;
-            const float bottomPad = 16f;
-            var rowHeight = labelHeight + gap + toggleHeight + bottomPad;
-
-            var row = new GameObject($"Row_{label}", typeof(RectTransform));
-            row.transform.SetParent(parent, false);
-            var rowLayout = row.AddComponent<VerticalLayoutGroup>();
-            rowLayout.spacing = gap;
-            rowLayout.childControlHeight = true;
-            rowLayout.childControlWidth = true;
-            rowLayout.childForceExpandHeight = false;
-            rowLayout.childForceExpandWidth = true;
-            var rowElement = row.AddComponent<LayoutElement>();
-            rowElement.preferredHeight = rowHeight;
-            rowElement.minHeight = rowHeight;
-
-            AddLabel(row.transform, label, labelHeight);
-
-            var host = new GameObject("ToggleHost", typeof(RectTransform));
-            host.transform.SetParent(row.transform, false);
-            var hostLayout = host.AddComponent<HorizontalLayoutGroup>();
-            hostLayout.childAlignment = TextAnchor.MiddleCenter;
-            hostLayout.childControlWidth = false;
-            hostLayout.childControlHeight = false;
-            var hostElement = host.AddComponent<LayoutElement>();
-            hostElement.preferredHeight = toggleHeight;
-            hostElement.minHeight = toggleHeight;
-
-            var button = new GameObject("Toggle", typeof(RectTransform));
-            button.transform.SetParent(host.transform, false);
-            ((RectTransform)button.transform).sizeDelta = new Vector2(200f, toggleHeight);
-            var bg = button.AddComponent<Image>();
-            bg.sprite = PanelSprite.Get();
-            bg.type = Image.Type.Sliced;
-            bg.raycastTarget = true;
-
-            var textGo = new GameObject("State", typeof(RectTransform));
-            textGo.transform.SetParent(button.transform, false);
-            Stretch((RectTransform)textGo.transform, 0f);
-            var stateText = textGo.AddComponent<TextMeshProUGUI>();
-            stateText.fontSize = 30f;
-            stateText.alignment = TextAlignmentOptions.Center;
-            stateText.raycastTarget = false;
-            GameFonts.Apply(stateText, preferOutline: true);
-
-            void Paint()
-            {
-                var on = setting.Value;
-                bg.color = on ? Palette.Accent : new Color(1f, 1f, 1f, 0.14f);
-                stateText.text = on ? "<b>On</b>" : "Off";
-                stateText.color = Palette.Label;
-            }
-
-            Paint();
-
-            var trigger = button.AddComponent<EventTrigger>();
-            AddTrigger(trigger, EventTriggerType.PointerClick, () =>
-            {
-                setting.Value = !setting.Value; // raises SettingChanged -> ApplyFlapFreeze
-                Paint();
-            });
-            button.AddComponent<ScrollForwarder>();
-
-            return rowHeight;
-        }
-
-        /// <summary>
-        /// A labelled horizontal slider bound to a float config entry, with a live "x" readout.
-        /// Built from plain Images (solid track + accent fill) and a circular handle rather than a
-        /// cloned game widget - the game has no slider in this screen to clone. Returns the row
-        /// height so the caller can size the scroll content.
-        /// </summary>
-        private static float AddSliderRow(Transform parent, string label, ConfigEntry<float> setting, float min, float max,
-            Color? accent = null)
-        {
-            return AddSliderRow(parent, label, () => setting.Value, v => setting.Value = v, min, max, accent);
-        }
-
-        /// <summary>
-        /// Slider bound to a plain getter/setter rather than a ConfigEntry - for any control that is
-        /// intentionally not persisted. Writing the setter does NOT raise Config.SettingChanged, so
-        /// only the preview refreshes (via OnColorChanged), not the live player. (No caller uses this
-        /// overload today; the ConfigEntry overload above delegates to it.)
-        /// </summary>
-        private static float AddSliderRow(Transform parent, string label, Func<float> get, Action<float> set,
-            float min, float max, Color? accent = null)
-        {
-            const float labelHeight = 40f;
-            const float gap = 44f;
-            const float sliderHeight = 40f;
-            const float bottomPad = 20f;
-            var rowHeight = labelHeight + gap + sliderHeight + bottomPad;
-
-            var row = new GameObject($"Row_{label}", typeof(RectTransform));
-            row.transform.SetParent(parent, false);
-            var rowLayout = row.AddComponent<VerticalLayoutGroup>();
-            rowLayout.spacing = gap;
-            rowLayout.childControlHeight = true;
-            rowLayout.childControlWidth = true;
-            rowLayout.childForceExpandHeight = false;
-            rowLayout.childForceExpandWidth = true;
-            var rowElement = row.AddComponent<LayoutElement>();
-            rowElement.preferredHeight = rowHeight;
-            rowElement.minHeight = rowHeight;
-
-            AddLabel(row.transform, label, labelHeight);
-
-            var host = new GameObject("SliderHost", typeof(RectTransform));
-            host.transform.SetParent(row.transform, false);
-            var hostLayout = host.AddComponent<HorizontalLayoutGroup>();
-            hostLayout.childAlignment = TextAnchor.MiddleCenter;
-            hostLayout.childControlWidth = true;
-            hostLayout.childControlHeight = true;
-            hostLayout.childForceExpandWidth = false;
-            hostLayout.spacing = 24f;
-            hostLayout.padding = new RectOffset(40, 40, 0, 0);
-            var hostElement = host.AddComponent<LayoutElement>();
-            hostElement.preferredHeight = sliderHeight;
-            hostElement.minHeight = sliderHeight;
-
-            var sliderGo = new GameObject("Slider", typeof(RectTransform));
-            sliderGo.transform.SetParent(host.transform, false);
-            var sliderLE = sliderGo.AddComponent<LayoutElement>();
-            sliderLE.preferredHeight = 22f;
-            sliderLE.minHeight = 22f;
-            sliderLE.flexibleWidth = 1f;
-
-            var track = new GameObject("Track", typeof(RectTransform));
-            track.transform.SetParent(sliderGo.transform, false);
-            ThinCenteredBar((RectTransform)track.transform);
-            var trackImg = track.AddComponent<Image>();
-            trackImg.color = new Color(1f, 1f, 1f, 0.16f);
-            trackImg.raycastTarget = true;
-
-            var fillArea = new GameObject("Fill Area", typeof(RectTransform));
-            fillArea.transform.SetParent(sliderGo.transform, false);
-            ThinCenteredBar((RectTransform)fillArea.transform);
-            var fill = new GameObject("Fill", typeof(RectTransform));
-            fill.transform.SetParent(fillArea.transform, false);
-            var fillRect = (RectTransform)fill.transform;
-            fillRect.anchorMin = new Vector2(0f, 0f);
-            fillRect.anchorMax = new Vector2(0f, 1f);
-            fillRect.sizeDelta = new Vector2(0f, 0f);
-            var fillImg = fill.AddComponent<Image>();
-            fillImg.color = accent ?? Palette.Accent;
-            fillImg.raycastTarget = false;
-
-            // The Slider drives the handle's anchors to full vertical stretch every frame, so the
-            // handle's HEIGHT comes from the slide area, not from the handle's own size. Make the
-            // slide area a short centred bar (26px, inset by the handle radius each side) so the
-            // handle stretches to a 26px circle instead of a tall oval.
-            var handleArea = new GameObject("Handle Slide Area", typeof(RectTransform));
-            handleArea.transform.SetParent(sliderGo.transform, false);
-            var handleAreaRect = (RectTransform)handleArea.transform;
-            handleAreaRect.anchorMin = new Vector2(0f, 0.5f);
-            handleAreaRect.anchorMax = new Vector2(1f, 0.5f);
-            handleAreaRect.pivot = new Vector2(0.5f, 0.5f);
-            handleAreaRect.sizeDelta = new Vector2(-26f, 26f);
-            handleAreaRect.anchoredPosition = Vector2.zero;
-
-            var handle = new GameObject("Handle", typeof(RectTransform));
-            handle.transform.SetParent(handleArea.transform, false);
-            var handleRect = (RectTransform)handle.transform;
-            handleRect.sizeDelta = new Vector2(26f, 0f); // width 26; height comes from the 26px slide area
-            var handleImg = handle.AddComponent<Image>();
-            handleImg.sprite = CircleSprite.Get();
-            handleImg.color = accent ?? Palette.Label;
-
-            var slider = sliderGo.AddComponent<Slider>();
-            slider.fillRect = fillRect;
-            slider.handleRect = handleRect;
-            slider.targetGraphic = handleImg;
-            slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = min;
-            slider.maxValue = max;
-            slider.wholeNumbers = false;
-            slider.value = Mathf.Clamp(get(), min, max);
-
-            var valueGo = new GameObject("Value", typeof(RectTransform));
-            valueGo.transform.SetParent(host.transform, false);
-            var valueLE = valueGo.AddComponent<LayoutElement>();
-            valueLE.preferredWidth = 96f;
-            valueLE.minWidth = 96f;
-            var valueText = valueGo.AddComponent<TextMeshProUGUI>();
-            valueText.text = $"{get():0.0}x";
-            valueText.fontSize = 30f;
-            valueText.color = Palette.Label;
-            valueText.alignment = TextAlignmentOptions.Left;
-            valueText.raycastTarget = false;
-            GameFonts.Apply(valueText, preferOutline: false);
-
-            slider.onValueChanged.AddListener(v =>
-            {
-                set(v);
-                valueText.text = $"{v:0.0}x";
-                OnColorChanged?.Invoke();
-            });
-
-            return rowHeight;
-        }
-
-        private static void AddLabel(Transform parent, string text, float height)
-        {
-            // Prefer the game's decorated header (swirl flourishes + rule); fall back to a plain
-            // left-aligned label if the template cannot be found.
-            var decorated = HeaderDecoration.Create(parent, text);
-            if (decorated != null)
-            {
-                var headerElement = decorated.GetComponent<LayoutElement>() ?? decorated.AddComponent<LayoutElement>();
-                headerElement.preferredHeight = height;
-                headerElement.minHeight = height;
-                return;
-            }
-
-            var host = new GameObject("Label", typeof(RectTransform));
-            host.transform.SetParent(parent, false);
-
-            var label = host.AddComponent<TextMeshProUGUI>();
-            label.text = text;
-            label.fontSize = 32f;
-            label.color = Palette.Label;
-            label.alignment = TextAlignmentOptions.Left;
-            label.raycastTarget = false;
-            GameFonts.Apply(label, preferOutline: false);
-
-            var element = host.AddComponent<LayoutElement>();
-            element.preferredHeight = height;
-            element.minHeight = height;
-        }
-
-        private static void AddSwatch(Transform parent, string name, string hex, Color fill, ConfigEntry<string> setting)
-        {
-            // Prefer the game's own widget (bat wings, checkmark, hover sound); fall back to a
-            // drawn swatch only if the template cannot be found.
-            if (BatFormSwatch.IsAvailable)
-            {
-                var cloned = BatFormSwatch.Create(
-                    parent, $"Swatch_{name}", fill, () => IsCurrent(setting, hex),
-                    () => { Apply(setting, hex); RefreshSelection(); });
-
-                if (cloned != null)
-                {
-                    ClonedSwatches.Add(cloned);
-                    return;
-                }
-            }
-
-            var swatch = BuildSwatchShell(parent, $"Swatch_{name}", fill, out var ring, out var check);
-
-            var trigger = swatch.AddComponent<EventTrigger>();
-            AddTrigger(trigger, EventTriggerType.PointerEnter, () => ring.enabled = true);
-            AddTrigger(trigger, EventTriggerType.PointerExit, () => ring.enabled = IsCurrent(setting, hex));
-            AddTrigger(trigger, EventTriggerType.PointerClick, () =>
-            {
-                Apply(setting, hex);
-                RefreshSelection();
-            });
-            swatch.AddComponent<ScrollForwarder>(); // EventTrigger eats the wheel; keep the panel scrollable
-
-            Swatches.Add(new SwatchEntry(setting, hex, ring, check, isCustomTile: false));
-        }
-
-        private static void AddCustomTile(Transform parent, ConfigEntry<string> setting)
-        {
-            var fillColor = IsCustomValue(setting) ? ParseOr(setting.Value, Color.white) : (Color?)null;
-
-            if (BatFormSwatch.IsAvailable)
-            {
-                var cloned = BatFormSwatch.Create(
-                    parent, "Swatch_Custom", fillColor, () => IsCustomValue(setting),
-                    () => OpenPicker(parent, setting));
-
-                if (cloned != null)
-                {
-                    ClonedSwatches.Add(cloned);
-                    // Centre the "+" on the colour plate (the visible circle), not the widget root -
-                    // the root reserves extra height, so centring on it puts the "+" off-centre.
-                    AddCaption(cloned.PlateTransform != null ? cloned.PlateTransform : cloned.transform, "+");
-                    return;
-                }
-            }
-
-            var fill = fillColor ?? new Color(0.22f, 0.18f, 0.30f, 1f);
-            var swatch = BuildSwatchShell(parent, "Swatch_Custom", fill, out var ring, out var check);
-
-            AddCaption(swatch.transform, "+");
-
-            var trigger = swatch.AddComponent<EventTrigger>();
-            AddTrigger(trigger, EventTriggerType.PointerEnter, () => ring.enabled = true);
-            AddTrigger(trigger, EventTriggerType.PointerExit, () => ring.enabled = IsCustomValue(setting));
-            AddTrigger(trigger, EventTriggerType.PointerClick, () => OpenPicker(parent, setting));
-            swatch.AddComponent<ScrollForwarder>(); // EventTrigger eats the wheel; keep the panel scrollable
-
-            Swatches.Add(new SwatchEntry(setting, null, ring, check, isCustomTile: true));
-        }
-
-        /// <summary>
-        /// A swatch is three stacked circles: an accent ring, the colour face inset inside it, and
-        /// a checkmark on top. The ring is a full-size circle behind a smaller face rather than an
-        /// outline sprite, which keeps it to one generated texture for everything.
-        /// </summary>
-        private static GameObject BuildSwatchShell(Transform parent, string name, Color fill, out Image ring, out TextMeshProUGUI check)
-        {
-            var swatch = new GameObject(name, typeof(RectTransform));
-            swatch.transform.SetParent(parent, false);
-
-            var ringHost = new GameObject("Ring", typeof(RectTransform));
-            ringHost.transform.SetParent(swatch.transform, false);
-            Stretch((RectTransform)ringHost.transform, 0f);
-            ring = ringHost.AddComponent<Image>();
-            ring.sprite = CircleSprite.Get();
-            ring.color = Palette.Accent;
-            ring.raycastTarget = false;
-            ring.enabled = false;
-
-            var faceHost = new GameObject("Face", typeof(RectTransform));
-            faceHost.transform.SetParent(swatch.transform, false);
-            Stretch((RectTransform)faceHost.transform, 7f);
-            var face = faceHost.AddComponent<Image>();
-            face.sprite = CircleSprite.Get();
-            face.color = fill;
-            // The face is the click target; the swatch root has no graphic of its own.
-            face.raycastTarget = true;
-
-            var checkHost = new GameObject("Check", typeof(RectTransform));
-            checkHost.transform.SetParent(swatch.transform, false);
-            Stretch((RectTransform)checkHost.transform, 0f);
-            check = checkHost.AddComponent<TextMeshProUGUI>();
-            check.text = "<b>✓</b>";
-            check.fontSize = 46f;
-            check.color = Palette.Label;
-            check.alignment = TextAlignmentOptions.Center;
-            check.raycastTarget = false;
-            check.enabled = false;
-            GameFonts.Apply(check, preferOutline: true);
-
-            return swatch;
-        }
-
-        private static void AddCaption(Transform parent, string text)
-        {
-            var host = new GameObject("Caption", typeof(RectTransform));
-            host.transform.SetParent(parent, false);
-            host.transform.SetAsLastSibling();
-            Stretch((RectTransform)host.transform, 0f);
-
-            // ignoreLayout so a layout group on the cloned swatch cannot reposition it - the "+"
-            // was landing at the bottom because the clone's own layout was placing this host.
-            var element = host.AddComponent<LayoutElement>();
-            element.ignoreLayout = true;
-
-            var label = host.AddComponent<TextMeshProUGUI>();
-            label.text = text;
-            label.fontSize = 44f;
-            label.color = Palette.Label;
-            label.alignment = TextAlignmentOptions.Center;   // horizontal centre
-            label.verticalAlignment = VerticalAlignmentOptions.Middle;
-            label.raycastTarget = false;
-            GameFonts.Apply(label, preferOutline: false);
-        }
-
-        private static void Stretch(RectTransform rect, float inset)
-        {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(inset, inset);
-            rect.offsetMax = new Vector2(-inset, -inset);
-        }
-
-        // A full-width, vertically-centred thin bar - the slider track/fill, so the slider reads as
-        // a slim line with a round handle rather than a fat block filling the whole row height.
-        private static void ThinCenteredBar(RectTransform rect)
-        {
-            rect.anchorMin = new Vector2(0f, 0.5f);
-            rect.anchorMax = new Vector2(1f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(0f, 12f);
-            rect.anchoredPosition = Vector2.zero;
-        }
-
-        private static void OpenPicker(Transform context, ConfigEntry<string> setting)
-        {
-            var initial = ParseOr(setting.Value, Color.white);
-            var canvas = context.GetComponentInParent<Canvas>();
-            var pickerParent = canvas != null ? (RectTransform)canvas.transform : (RectTransform)root.transform;
-            ColorPickerPopup.Open(pickerParent, initial, chosen =>
-            {
-                Apply(setting, "#" + ColorUtility.ToHtmlStringRGB(chosen));
-                // Rebuild so the custom tile shows the colour that was picked - swatch fill is set
-                // when it is created, not bound to the setting.
-                if (lastParent != null)
-                {
-                    Build(lastParent);
-                }
-            });
-        }
-
-        private static void AddTrigger(EventTrigger trigger, EventTriggerType type, Action action)
-        {
-            var entry = new EventTrigger.Entry { eventID = type };
-            entry.callback.AddListener(_ => action());
-            trigger.triggers.Add(entry);
-        }
-
-        private static bool IsCurrent(ConfigEntry<string> setting, string hex)
-        {
-            var current = (setting.Value ?? string.Empty).Trim();
-            return string.Equals(current, (hex ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsCustomValue(ConfigEntry<string> setting)
-        {
-            var current = (setting.Value ?? string.Empty).Trim();
-            if (current.Length == 0)
-            {
-                return false;
-            }
-
-            foreach (var (_, hex) in Presets)
-            {
-                if (string.Equals(current, hex, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static void RefreshSelection()
-        {
-            foreach (var entry in Swatches)
-            {
-                var selected = entry.IsCustomTile ? IsCustomValue(entry.Setting) : IsCurrent(entry.Setting, entry.Hex);
-
-                if (entry.Ring != null)
-                {
-                    entry.Ring.enabled = selected;
-                }
-
-                if (entry.Check != null)
-                {
-                    entry.Check.enabled = selected;
-                }
-            }
-
-            foreach (var cloned in ClonedSwatches)
-            {
-                if (cloned != null)
-                {
-                    cloned.Refresh();
-                }
-            }
-        }
-
-        private static void Apply(ConfigEntry<string> setting, string hex)
-        {
-            setting.Value = hex ?? string.Empty;
-            OnColorChanged?.Invoke();
-        }
-
-        private static Color ParseOr(string hex, Color fallback)
-        {
-            if (string.IsNullOrWhiteSpace(hex))
-            {
-                return fallback;
-            }
-
-            return ColorUtility.TryParseHtmlString(hex, out var parsed) ? parsed : fallback;
-        }
-
-        private readonly struct SwatchEntry
-        {
-            internal SwatchEntry(ConfigEntry<string> setting, string hex, Image ring, TextMeshProUGUI check, bool isCustomTile)
-            {
-                Setting = setting;
-                Hex = hex;
-                Ring = ring;
-                Check = check;
-                IsCustomTile = isCustomTile;
-            }
-
-            internal ConfigEntry<string> Setting { get; }
-            internal string Hex { get; }
-            internal Image Ring { get; }
-            internal TextMeshProUGUI Check { get; }
-            internal bool IsCustomTile { get; }
         }
     }
 }
