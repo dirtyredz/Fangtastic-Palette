@@ -30,6 +30,13 @@ namespace FangtasticPalette
         // id folded with the recolour spec's own Key (EyeRecolorSpec / SkinPaletteSpec), which covers
         // every field, so the cache can never collide two genuinely different recolours.
 
+        // Cap the recolour working resolution. A large source atlas (e.g. Purrtastic's 4096² eye atlas)
+        // run through the per-pixel HSV loop froze the game ~1.7s per build. The recoloured region is
+        // tiny on screen, so full res is waste. Downscale anything above this cap before the pixel work;
+        // textures already <= the cap are untouched (a no-op). Raise it if a region looks soft; lower
+        // it for more speed. (Defensive port from Purrtastic Palette - see docs/DECISIONS.md.)
+        private const int MaxRecolorDimension = 1024;
+
         /// <summary>
         /// HSV colorize + eye brightness-split. All the classifier/mask/floor knobs live on
         /// <see cref="EyeRecolorSpec"/>, which also owns the cache identity (see its docs). The
@@ -66,8 +73,12 @@ namespace FangtasticPalette
             var glintVMin = spec.GlintVMin;
             var glintVMax = spec.GlintVMax;
 
-            var width = source.width;
-            var height = source.height;
+            // Downscale oversized atlases to the cap before the pixel work (see MaxRecolorDimension).
+            // ReadPixelsRobust blits the source into a width×height RenderTexture, so a smaller target
+            // here means the GPU downscales on the blit and the loop/output run at that size.
+            var scale = Mathf.Min(1f, (float)MaxRecolorDimension / Mathf.Max(source.width, source.height));
+            var width = Mathf.Max(1, Mathf.RoundToInt(source.width * scale));
+            var height = Mathf.Max(1, Mathf.RoundToInt(source.height * scale));
             var sourcePixels = ReadPixelsRobust(source, width, height);
 
             Color.RGBToHSV(target, out var targetH, out var targetS, out var targetV);
@@ -230,8 +241,12 @@ namespace FangtasticPalette
             var earVMin = spec.EarVMin;
             var earVMax = spec.EarVMax;
 
-            var width = source.width;
-            var height = source.height;
+            // Downscale oversized atlases to the cap before the pixel work (see MaxRecolorDimension).
+            // The spatial-region helpers (InBox/Coverage) derive pixel position from the index and
+            // width/height, so they stay proportional at the smaller size.
+            var scale = Mathf.Min(1f, (float)MaxRecolorDimension / Mathf.Max(source.width, source.height));
+            var width = Mathf.Max(1, Mathf.RoundToInt(source.width * scale));
+            var height = Mathf.Max(1, Mathf.RoundToInt(source.height * scale));
             var sourcePixels = ReadPixelsRobust(source, width, height);
             var outPixels = new Color[sourcePixels.Length];
 

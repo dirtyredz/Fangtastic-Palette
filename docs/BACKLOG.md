@@ -52,6 +52,10 @@ _None._ The review found no P0 structural rot.
   since each mod is a standalone repo.
 
 ## Done (2026-08-22)
+- [x] **Cap recolour resolution** (defensive port from Purrtastic). `MaxRecolorDimension = 1024` in
+  `TextureRecolor` downscales oversized atlases before the main-thread HSV loop (both `Build` +
+  `BuildBatBody`). Profiled in-game: every bat atlas is 512², so it's a no-op today — insurance against
+  a future large atlas + Palette-mod consistency. See DECISIONS.md / GOTCHAS.md.
 - [x] **Split the `BatFormColorPanel` God-file** (P1). 753 → `BatFormColorPanel.cs` (150, orchestrator +
   declarative intensity map, no `switch`) + `SwatchGrid.cs` (353, swatches + selection) + `PanelControls.cs`
   (289, reusable row builders). One-directional deps; callbacks injected. *In-game verify pending.*

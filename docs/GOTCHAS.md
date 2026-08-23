@@ -6,6 +6,11 @@ Non-obvious traps. Format: **trap → why → do instead**.
   black → use the HSV colorize in `TextureRecolor` (regenerate the texture).**
 - **Don't call `Texture2D.GetPixels()` on game textures → they aren't Read/Write-enabled and it throws
   → read via `TextureRecolor.ReadPixelsRobust` (RenderTexture blit + ReadPixels).**
+- **The recolour is a per-pixel HSV loop on the MAIN thread → a large source atlas freezes the game
+  (Purrtastic's 4096² cat-eye atlas = ~1.7s/build) → `TextureRecolor` caps the working resolution at
+  `MaxRecolorDimension` (1024²), downscaling bigger atlases before the loop. The bat's atlases are
+  512² so it's a no-op today; keep the cap when porting/adding assets, and raise it (not remove it) if
+  a region looks soft.**
 - **The two albedo slots must both be written → the "Bat" material carries `_BaseMap`/`_BaseColor` AND
   `_MainTex`/`_Color`; writing one leaves the other showing the original → always loop `BodyTexturePairs`.**
 - **Don't add a colour to `BatFormColorPanel.Rows` without also adding it to

@@ -3,6 +3,23 @@
 Design/architecture decisions worth not re-litigating. Newest first. Seeded from code + git history
 + the README; where rationale wasn't recoverable it's marked.
 
+## 2026-08-22 — Cap the recolour working resolution (`MaxRecolorDimension = 1024`)
+**Why:** The recolour is a per-pixel HSV loop on the **main thread**. In the sibling Purrtastic
+Palette this froze the game ~1.7s per build on its 4096² cat-eye atlas (16.7M px), and builds fire on
+every transform / wardrobe-open / colour change. Defensive port of that fix: downscale any source
+atlas larger than 1024² (via the `Graphics.Blit` already in `ReadPixelsRobust`) before the pixel work,
+in both `TextureRecolor.Build` (eyes) and `BuildBatBody`. The recoloured region is small on screen and
+all region logic is normalised/proportional, so the downscale is imperceptible. **Profiled here first:**
+every bat atlas is 512², so the cap is a **no-op today** (work size == source) — pure insurance against
+a future large atlas, and it keeps the Palette mods consistent. Raise to 2048 if a region ever looks
+soft. The recolour engine is copied per repo (shared only as docs, `../../16-recolouring-characters.md`),
+so this was applied by hand, not shared as code.
+**Rejected:** Moving the pixel loop off-thread — Unity texture APIs (`GetPixels`/`SetPixels`/`Apply`)
+are main-thread only, so only the arithmetic could move and the marshalling cost isn't worth it at
+these sizes. A GPU compute/fragment shader — far more machinery than a shipped small mod needs, and the
+cap already removes the freeze. Leaving it uncapped — a large future atlas would reintroduce the freeze
+silently.
+
 ## 2026-08-22 — Embed the tab icon in the DLL (v1.0.1)
 **Why:** `pack.ps1` (a workspace-synced canonical) bundles only the DLL, so the release zip never
 contained `tab-icon.png` — a fresh install fell back to a generated placeholder glyph, and the bat
