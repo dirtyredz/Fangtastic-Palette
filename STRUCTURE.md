@@ -13,7 +13,10 @@ Two cooperating layers, cleanly separated (verified: the engine never references
 - **Wardrobe UI** — injects a "Bat Form" tab into the mirror's wardrobe with a live preview, swatch
   pickers, sliders, and an RGB colour picker, all cloned from the game's own widgets.
 
-Source is flat in `src/` (no `src/FangtasticPalette/`), 24 files, ~4,500 lines. It is the second entry
+Source lives under `src/` (no `src/FangtasticPalette/`) in three responsibility folders —
+`game/` (Harmony patches + live-game bridges), `ui/` (the wardrobe panel and its widgets), and
+`core/` (the recolour engine, its specs, caches and config model) — with `Plugin.cs` beside the
+`.csproj` at `src/` root, as BepInEx expects. 24 files, ~4,500 lines. It is the second entry
 in the "…tastic Palette" set after the sibling **PurrtasticPalette** (cat); much of the machinery is a
 port, and a third (Fintastic / mermaid) is planned to reuse it again.
 
@@ -39,26 +42,82 @@ ENGINE                                        UI (wardrobe)
                                                     ScrollForwarder, PreviewBloomSuppressor
 ```
 
+## Layout
+
+Where a new file goes. The tree is for humans; the **Enforced homes** list below is the machine-read
+contract (the placement hook parses it), so keep the two in step with each other and the real tree.
+
+```
+FangtasticPalette/
+├── pack.ps1                  build + zip to dist/ (workspace-synced canonical — don't hand-edit)
+├── Directory.Build.props     game DLL refs + GenerateModBuildInfo (synced canonical)
+├── STRUCTURE.md              this map · README/CHANGELOG/NEXUS/RELEASING beside it
+├── docs/                     ARCHITECTURE · DECISIONS · FEATURES · ROADMAP · BACKLOG · GOTCHAS
+├── assets/                   tab-icon.png, embedded into the DLL by the .csproj
+├── screenshots/              Nexus art (PNG only)
+├── scripts/                  repo shell tooling: install-git-hooks.sh, pre-commit.sh
+├── .github/workflows/        CI (format check only — no runner has the game's DLLs)
+└── src/
+    ├── FangtasticPalette.csproj  netstandard2.1; **/*.cs globs recursively, so folders need no edit
+    ├── Plugin.cs                 BepInEx entry point — MUST stay beside the .csproj
+    ├── game/                     the game-facing edge: Harmony patches + live-asset bridges
+    │   ├── BatColorPatch.cs          body-load postfix + the apply-to-renderers routing
+    │   ├── BatFormWardrobe.cs        3 wardrobe-screen patches (OnShow/HandleTabSelected/OnHide)
+    │   ├── BatColorReapplier.cs      per-frame guard: re-applies what the game reverts
+    │   ├── PreviewBloomSuppressor.cs overrides the game's URP bloom while the tab is open
+    │   ├── GameFonts.cs              locates the game's Gelica font + outline/glow presets
+    │   └── Templates.cs              sources, clones and strips the game's own widgets
+    ├── ui/                       everything the mod draws: panels, widgets, sprites, dialogs
+    │   ├── BatFormColorPanel.cs      panel orchestrator: composition + height arithmetic
+    │   ├── SwatchGrid.cs             one colour's swatch grid, custom tile, selection state
+    │   ├── PanelControls.cs          label/toggle/slider row builders + RectTransform helpers
+    │   ├── BatFormSwatch.cs          one swatch, cloned from the game's option widget
+    │   ├── ColorPickerPopup.cs       the RGB picker dialog
+    │   ├── HeaderDecoration.cs       decorated category header, cloned from a game bar
+    │   ├── TabIcon.cs                tab icon: user PNG → embedded default → drawn glyph
+    │   ├── PawSprite.cs              generated paw glyph
+    │   ├── PanelSprite.cs            generated 9-sliced plate
+    │   ├── CircleSprite.cs           generated white circle
+    │   ├── ScrollForwarder.cs        forwards the wheel up to the ScrollRect
+    │   └── Palette.cs                the two UI colours the mod draws itself
+    └── core/                     the mod's own domain logic + state — no game patching
+        ├── TextureRecolor.cs         the pixel engine: HSV colorize, eye split, body remap
+        ├── RecolorSpecs.cs           EyeRecolorSpec / SkinPaletteSpec / SpatialRegion + cache keys
+        ├── RecolorTextureCache.cs    bounded LRU of regenerated textures (destroys on evict)
+        ├── RendererOverrideStore.cs  captured original renderer state, for restore-on-blank
+        └── BatPalette.cs             canonical colour set + immutable BatPaletteValues snapshot
+```
+
+**Enforced homes:**
+
+- `src/game/` — Harmony patches and live-game bridges
+- `src/ui/` — panels, widgets, sprites, icons, dialogs, and the layout that arranges them
+- `src/core/` — the mod's own domain logic, state, config model and recolour caches
+- `scripts/` — repo shell tooling (git-hook install, pre-commit formatter)
+- `src/Plugin.cs` — BepInEx entry point; must sit beside the `.csproj`
+- `pack.ps1` — build/zip entry point; workspace-synced canonical, must stay at the mod root
+
 ## Components
 
 | Component | Responsibility | Key files | Depends on |
 |---|---|---|---|
 | **Plugin** | BepInEx entry; binds every config value (canonical set enumerated by BatPalette); wires live-apply; installs Harmony + reapplier; purges the recolour caches on teardown (`OnDestroy`) | `src/Plugin.cs` | BepInEx, Harmony, RecolorTextureCache, RendererOverrideStore |
-| **Palette config owner** | Single source of truth for the colour set: canonical ordered `Colors` list (label + `ConfigEntry` + default swatch) that the panel rows & wardrobe revert both derive from; `Snapshot()` → immutable `BatPaletteValues` for the engine | `src/BatPalette.cs` | BepInEx, Plugin config entries |
-| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original state via RendererOverrideStore; recolours from a `BatPaletteValues` snapshot (no direct config statics) | `src/BatColorPatch.cs` (639) | TextureRecolor, RendererOverrideStore, BatPalette |
-| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path (caps working res at `MaxRecolorDimension`); delegates result caching to RecolorTextureCache | `src/TextureRecolor.cs` (479) | UnityEngine, RecolorSpecs, RecolorTextureCache |
-| **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours. Also holds the bat-body `SpatialRegion` (its only consumer is `SkinPaletteSpec`) | `src/RecolorSpecs.cs` | UnityEngine |
-| **Recolour texture cache** | Bounded LRU (cap 32) of regenerated textures; `Destroy`s evicted textures + purge-on-teardown, so wardrobe fiddling can't leak. LRU never evicts the active palette (reapplier keeps it MRU) | `src/RecolorTextureCache.cs` | UnityEngine |
-| **Renderer override store** | The four `Original*` maps (texture/tint/wing-dust/particle-start) captured for restore-on-blank; `Purge()` on teardown + `PruneDead()` drops entries for destroyed Materials/ParticleSystems | `src/RendererOverrideStore.cs` | UnityEngine |
-| **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit); prunes dead override entries every ~600 frames | `src/BatColorReapplier.cs` | BatColorPatch, RendererOverrideStore |
-| **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel (colours from BatPalette); hides VFX/bloom | `src/BatFormWardrobe.cs` (486) | BatColorPatch, BatFormColorPanel, BatPalette, TabIcon, PreviewBloomSuppressor |
-| **Colour panel (orchestrator)** | Composes the scrollable panel + deterministic height arithmetic; declarative colour→intensity-slider map (no label `switch`) | `src/BatFormColorPanel.cs` (150) | BatPalette, SwatchGrid, PanelControls, ColorPickerPopup |
-| **Swatch grid** | One colour's swatch grid: cloned-or-drawn swatches, "+" custom tile + picker, selection state + `RefreshSelection` | `src/SwatchGrid.cs` | PanelControls, BatFormSwatch, ColorPickerPopup, sprites, GameFonts |
-| **Panel controls** | Reusable control-row builders (label / toggle / slider) + RectTransform primitives (`Stretch`/`ThinCenteredBar`/`AddTrigger`) | `src/PanelControls.cs` | PanelSprite, CircleSprite, GameFonts, HeaderDecoration, ScrollForwarder |
-| **Cloned swatch** | One colour swatch cloned from the game's own widget (ring/checkmark/hover sound) | `src/BatFormSwatch.cs` | Templates (reflection), ScrollForwarder |
-| **Colour picker** | Modal RGB picker adapted from ModNook; clones the game `SliderButton` | `src/ColorPickerPopup.cs` | Templates, PanelSprite, GameFonts |
-| **Widget cloning** | Sources & clones native game widgets (SliderButton) without waking them | `src/Templates.cs` | Chicken.UI |
-| **UI helpers** | Generated sprites (`CircleSprite`, `PanelSprite`, `PawSprite`), `TabIcon` (PNG override + fallback), `HeaderDecoration` (cloned header), `GameFonts`, `ScrollForwarder`, `PreviewBloomSuppressor`, `Palette` | those files | UnityEngine, Chicken.UI |
+| **Palette config owner** | Single source of truth for the colour set: canonical ordered `Colors` list (label + `ConfigEntry` + default swatch) that the panel rows & wardrobe revert both derive from; `Snapshot()` → immutable `BatPaletteValues` for the engine | `src/core/BatPalette.cs` | BepInEx, Plugin config entries |
+| **Colour patch/router** | Harmony postfix on bat body-load; routes each renderer (`Bat_Body`/eyes/`VFXBatWingDust`) to its colour; holds all UV-box + HSV tuning constants; captures/restores original state via RendererOverrideStore; recolours from a `BatPaletteValues` snapshot (no direct config statics) | `src/game/BatColorPatch.cs` (639) | TextureRecolor, RendererOverrideStore, BatPalette |
+| **Pixel engine** | HSV-colorize + eye brightness-split (`GetOrBuild`); 4-region bat-body palette remap + `SpatialRegion` UV compositing (`GetOrBuildBatBody`); `RenderTexture` read path (caps working res at `MaxRecolorDimension`); delegates result caching to RecolorTextureCache | `src/core/TextureRecolor.cs` (479) | UnityEngine, RecolorSpecs, RecolorTextureCache |
+| **Recolour specs** | `EyeRecolorSpec` / `SkinPaletteSpec` value types — the engine's two parameter objects; each owns its cache `Key` (folds in every field incl. `target`), so the engine can't collide two distinct recolours. Also holds the bat-body `SpatialRegion` (its only consumer is `SkinPaletteSpec`) | `src/core/RecolorSpecs.cs` | UnityEngine |
+| **Recolour texture cache** | Bounded LRU (cap 32) of regenerated textures; `Destroy`s evicted textures + purge-on-teardown, so wardrobe fiddling can't leak. LRU never evicts the active palette (reapplier keeps it MRU) | `src/core/RecolorTextureCache.cs` | UnityEngine |
+| **Renderer override store** | The four `Original*` maps (texture/tint/wing-dust/particle-start) captured for restore-on-blank; `Purge()` on teardown + `PruneDead()` drops entries for destroyed Materials/ParticleSystems | `src/core/RendererOverrideStore.cs` | UnityEngine |
+| **Per-frame reapply** | Reapplies body+eyes every `Update()` as a revert safety net (cheap: cache hit); prunes dead override entries every ~600 frames | `src/game/BatColorReapplier.cs` | BatColorPatch, RendererOverrideStore |
+| **Wardrobe tab** | Injects the "Bat Form" tab; swaps the preview rig to a bat body; ownership-gates; live-preview snapshot + revert-on-cancel (colours from BatPalette); hides VFX/bloom | `src/game/BatFormWardrobe.cs` (486) | BatColorPatch, BatFormColorPanel, BatPalette, TabIcon, PreviewBloomSuppressor |
+| **Colour panel (orchestrator)** | Composes the scrollable panel + deterministic height arithmetic; declarative colour→intensity-slider map (no label `switch`) | `src/ui/BatFormColorPanel.cs` (150) | BatPalette, SwatchGrid, PanelControls, ColorPickerPopup |
+| **Swatch grid** | One colour's swatch grid: cloned-or-drawn swatches, "+" custom tile + picker, selection state + `RefreshSelection` | `src/ui/SwatchGrid.cs` | PanelControls, BatFormSwatch, ColorPickerPopup, sprites, GameFonts |
+| **Panel controls** | Reusable control-row builders (label / toggle / slider) + RectTransform primitives (`Stretch`/`ThinCenteredBar`/`AddTrigger`) | `src/ui/PanelControls.cs` | PanelSprite, CircleSprite, GameFonts, HeaderDecoration, ScrollForwarder |
+| **Cloned swatch** | One colour swatch cloned from the game's own widget (ring/checkmark/hover sound) | `src/ui/BatFormSwatch.cs` | Templates (reflection), ScrollForwarder |
+| **Colour picker** | Modal RGB picker adapted from ModNook; clones the game `SliderButton` | `src/ui/ColorPickerPopup.cs` | Templates, PanelSprite, GameFonts |
+| **Widget cloning** | Sources & clones native game widgets (SliderButton) without waking them | `src/game/Templates.cs` | Chicken.UI |
+| **UI helpers** | Generated sprites (`CircleSprite`, `PanelSprite`, `PawSprite`), `TabIcon` (PNG override + fallback), `HeaderDecoration` (cloned header), `ScrollForwarder`, `Palette` | `src/ui/` | UnityEngine, Chicken.UI |
+| **Game bridges** | `GameFonts` (locates the game's Gelica font + material presets), `PreviewBloomSuppressor` (adds a zero-bloom Volume while the tab is open) | `src/game/` | UnityEngine, TMPro, URP |
 
 ## Key flows
 
@@ -72,7 +131,11 @@ ENGINE                                        UI (wardrobe)
 
 ## Conventions
 
-- Plugin `.cs` flat in `src/`; version single-sourced from `src/FangtasticPalette.csproj` `<Version>`
+- `Plugin.cs` sits at `src/` root beside the `.csproj`; every other `.cs` lives in `src/game/`,
+  `src/ui/` or `src/core/` (see [Layout](#layout)). The project is SDK-style, so `**/*.cs` globbing is
+  recursive — moving a file needs no `.csproj` change, and the flat `FangtasticPalette` namespace is
+  deliberately **not** folder-derived (never rename a namespace to match a folder).
+- Version single-sourced from `src/FangtasticPalette.csproj` `<Version>`
   via `ModBuildInfo.Version` (generated by `GenerateModBuildInfo` in `Directory.Build.props`).
   Never hardcode a version in `Plugin.cs`.
 - `Directory.Build.props` and `pack.ps1` are **workspace-synced canonicals** — do not edit here; they
@@ -97,7 +160,7 @@ below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a block
 
 - **P1 — `TextureRecolor` parameter explosion. ✅ RESOLVED 2026-08-22.** `GetOrBuild` and
   `GetOrBuildBatBody` now take `EyeRecolorSpec` / `SkinPaletteSpec` parameter objects (new
-  `src/RecolorSpecs.cs`), each owning its cache identity via a `Key` property. This fixed the fragile
+  `src/core/RecolorSpecs.cs`), each owning its cache identity via a `Key` property. This fixed the fragile
   `hex`-proxy cache key (`target` is now folded into `EyeRecolorSpec.Key`) and removed the redundant
   caller-supplied `cacheDiscriminator`. Behaviour-preserving: the pixel loops are byte-identical
   (specs unpack to the same locals at the top). *In-game recolour verification still pending before
