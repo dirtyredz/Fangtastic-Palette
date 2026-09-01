@@ -82,3 +82,10 @@ _None._ The review found no P0 structural rot.
   working shipped feature as a defect — out of scope for a code-structure review.
 
 _Living doc — refresh with /project-docs when it drifts._
+
+## Placement follow-up (from the 2026-09-01 structure review)
+
+- **P2 — `src/ui/` sits at exactly 12 files, the flat-bucket cap.** Not a violation, but the next UI
+  file added forces a split, so it is worth doing deliberately rather than under pressure. The seam is
+  already latent in this doc's own file-by-file grouping: panel/swatch *composition* versus *drawing
+  primitives* (sprites, icons, palette, scroll/pointer helpers). Roughly 6 files each.
