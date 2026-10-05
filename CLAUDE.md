@@ -6,7 +6,7 @@ How to work in this mod. Orientation lives in the doc set — read those, don't 
 - **[STRUCTURE.md](STRUCTURE.md)** — code map + structural debt.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — how the recolour + wardrobe system works.
 - **[docs/DECISIONS.md](docs/DECISIONS.md) · [FEATURES.md](docs/FEATURES.md) ·
-  [ROADMAP.md](docs/ROADMAP.md) · [BACKLOG.md](docs/BACKLOG.md) · [GOTCHAS.md](docs/GOTCHAS.md)**
+  [ROADMAP.md](docs/ROADMAP.md) · work items (`dk list`) · [GOTCHAS.md](docs/GOTCHAS.md)**
 
 ## This is a standalone repo inside a multi-repo workspace
 
@@ -53,4 +53,11 @@ This repo is gated (pre-push hook, installed 2026-08-22). Edit/debug freely; the
 runs the review and pushes (asking first) when work is ready. `/gate status` shows what's pending.
 Baseline: `Last full review: 2026-08-22` (see STRUCTURE.md).
 
-_Small mod, shipped. Prefer surgical changes; record any structural tradeoff in STRUCTURE.md/BACKLOG._
+_Small mod, shipped. Prefer surgical changes; record any structural tradeoff in STRUCTURE.md or as a Docket item._
+
+## Work items (Docket)
+
+Track work in `docs/items/` through `dk`. Use filtered `dk list --json` and `dk show`; use `add`, `set`,
+and `link` for changes. Never invent IDs or ranks. Claim work in the current worktree, release it when
+finished, and run `dk check` before pushing. Drop items instead of deleting them. Living docs remain
+ordinary Markdown.

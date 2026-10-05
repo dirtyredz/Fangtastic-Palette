@@ -156,7 +156,7 @@ FangtasticPalette/
 Recorded by the full review of **2026-08-22** (componentization + abstraction lenses + Codex
 cross-model). The mod is broadly well-shaped for its size — engine/UI layering is clean, no
 wrong-direction dependencies, small helpers are correctly one-job-per-file. No P0 rot. The items
-below are tracked in [docs/BACKLOG.md](docs/BACKLOG.md); nothing here is a blocker.
+below are tracked as Docket items (`dk list`); nothing here is a blocker.
 
 - **P1 — `TextureRecolor` parameter explosion. ✅ RESOLVED 2026-08-22.** `GetOrBuild` and
   `GetOrBuildBatBody` now take `EyeRecolorSpec` / `SkinPaletteSpec` parameter objects (new
